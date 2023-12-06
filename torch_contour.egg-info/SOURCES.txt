@@ -1,0 +1,13 @@
+LICENSE
+README.md
+pyproject.toml
+setup.cfg
+setup.py
+torch_contour/__init__.py
+torch_contour/py.typed
+torch_contour/torch_contour.py
+torch_contour.egg-info/PKG-INFO
+torch_contour.egg-info/SOURCES.txt
+torch_contour.egg-info/dependency_links.txt
+torch_contour.egg-info/requires.txt
+torch_contour.egg-info/top_level.txt
