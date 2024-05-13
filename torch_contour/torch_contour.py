@@ -14,7 +14,7 @@ class Contour_to_mask(nn.Module):
                 dim=-1,
             ).reshape(-1, 2),
             dim=1,
-        )
+        )/self.size
 
     def forward(self, contour):
 
@@ -23,14 +23,14 @@ class Contour_to_mask(nn.Module):
         roll_diff = torch.roll(diff, -1, dims=1)
         sign = diff * torch.roll(roll_diff, 1, dims=2)
         sign = sign[:, :, 1] - sign[:, :, 0]
-        sign = torch.tanh(k * sign)
+        sign = torch.tanh(self.k * sign)
         norm_diff = torch.linalg.vector_norm(diff, dim=2)
         norm_roll = torch.linalg.vector_norm(roll_diff, dim=2)
         scalar_product = torch.sum(diff * roll_diff, dim=2)
         clip = torch.clamp(scalar_product / (norm_diff * norm_roll ),-1 + self.eps, 1 - self.eps)
         angles = torch.acos(clip)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
-        sum_angles = torch.clamp(-torch.sum(sign * angles, dim=1) / (2 * torch.pi), 0, 1)
+        sum_angles = torch.clamp(torch.sum(sign * angles, dim=1) / (2 * torch.pi), 0, 1)
         out0 = sum_angles.reshape(1, self.size, self.size)
         mask = torch.unsqueeze(out0, dim=0)
 
@@ -50,7 +50,7 @@ class Contour_to_distance_map(nn.Module):
                 dim=-1,
             ).reshape(-1, 2),
             dim=1,
-        )
+        )/self.size
 
     def forward(self, contour):
 
@@ -69,9 +69,8 @@ class Contour_to_distance_map(nn.Module):
         clip = torch.clip(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
         angles = torch.arccos(clip)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
-        sum_angles = -torch.sum(sign * angles, dim=1) / (2 * torch.pi)
+        sum_angles = torch.sum(sign * angles, dim=1) / (2 * torch.pi)
         resize = sum_angles.reshape(1, self.size, self.size)
-        dmap = (resize * min_diff) / torch.max(resize * min_diff)
-
+        dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff),0)
         return dmap
 
