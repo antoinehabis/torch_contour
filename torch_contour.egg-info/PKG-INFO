@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 0.0.3
+Version: 0.0.5
 Summary: Differentiable contour to mask and contour to distance map implementation with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
@@ -64,5 +64,22 @@ The predicted polygon must be ordered in counter-clockwise.
 
 ## Example:
 
-check out  example.ipnb
+ ```
+from torch_contour.torch_contour import Contour_to_distance_map, Contour_to_mask
+import torch
+import matplotlib.pyplot as plt
+
+x = torch.tensor([[0.1,0.1],
+                  [0.1,0.9],
+                  [0.9,0.9],
+                  [0.9,0.1]])
+
+Dmap = Contour_to_distance_map(200)
+Mask = Contour_to_mask(200)
+
+plt.imshow(Dmap(x).cpu().detach().numpy()[0,0])
+plt.show()
+plt.imshow(Mask(x).cpu().detach().numpy()[0,0])
+plt.show()
+```
 

@@ -2,20 +2,23 @@ import torch
 import torch.nn as nn
 
 
+
+
 class Contour_to_mask(nn.Module):
+
     """This layer transform a polygon into a mask
-
+    
     ...
-
+    
     Attributes
     ----------
     size: int
-        the size of the output image
+        the size of the output image 
     k: float
         the control parameter to approximate the sign function
     eps: float
         a parameter to smooth the function and avoid division by 0
-
+    
     Methods
     -------
     forward(contour)
@@ -23,11 +26,12 @@ class Contour_to_mask(nn.Module):
     """
 
     def __init__(self, size, k=1e5, eps=1e-5):
+
         """
         Parameters
         ----------
         size: int
-            the size of the output image
+            the size of the output image 
         k: float
             the control parameter to approximate the sign function
         eps: float
@@ -38,19 +42,7 @@ class Contour_to_mask(nn.Module):
         self.k = k
         self.eps = eps
         self.size = size
-
-
-    def forward(self, contour):
-        """Return the distance map of the given size given the contour.
-
-        Raises
-        ------
-        ValueError
-            If the values of the contour or not between 0 and 1.
-        """
-
-        b = contour.shape[0]
-        mesh = (
+        self.mesh = (
             torch.unsqueeze(
                 torch.stack(
                     torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
@@ -60,45 +52,56 @@ class Contour_to_mask(nn.Module):
             )
             / self.size
         )
-        mesh = mesh.unsqueeze(0).repeat(b,1,1,1)
+
+    def forward(self, contour):
+
+        """Return the distance map of the given size given the contour.
+
+        Raises
+        ------
+        ValueError
+            If the values of the contour or not between 0 and 1.
+        """
 
         if (contour < 0).any() or (contour > 1).any():
             raise ValueError("Tensor values should be in the range [0, 1]")
 
-        contour = torch.unsqueeze(contour, dim=1)
-        diff = -mesh + contour
-        roll_diff = torch.roll(diff, -1, dims=2)
-        sign = diff * torch.roll(roll_diff, 1, dims=3)
-        sign = sign[:, :, :, 1] - sign[:, :, :, 0]
+        contours = torch.unsqueeze(contour, dim=0)
+        diff = -self.mesh + contours
+        roll_diff = torch.roll(diff, -1, dims=1)
+        sign = diff * torch.roll(roll_diff, 1, dims=2)
+        sign = sign[:, :, 1] - sign[:, :, 0]
         sign = torch.tanh(self.k * sign)
-        norm_diff = torch.linalg.vector_norm(diff, dim=3)
-        norm_roll = torch.linalg.vector_norm(roll_diff, dim=3)
-        scalar_product = torch.sum(diff * roll_diff, dim=3)
-
+        norm_diff = torch.linalg.vector_norm(diff, dim=2)
+        norm_roll = torch.linalg.vector_norm(roll_diff, dim=2)
+        scalar_product = torch.sum(diff * roll_diff, dim=2)
         clip = torch.clamp(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
         angles = torch.acos(clip)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
-        sum_angles = torch.clamp(torch.sum(sign * angles, dim=2) / (2 * torch.pi), 0, 1)
-        out0 = sum_angles.reshape(b, self.size, self.size)
+        sum_angles = torch.clamp(torch.sum(sign * angles, dim=1) / (2 * torch.pi), 0, 1)
+        out0 = sum_angles.reshape(1, self.size, self.size)
         mask = torch.unsqueeze(out0, dim=0)
-        
+
         return mask
+    
+
+
 
 
 class Contour_to_distance_map(nn.Module):
     """This layer transform a polygon into a distance map
-
+    
     ...
-
+    
     Attributes
     ----------
     size: int
-        the size of the output image
+        the size of the output image 
     k: float
         the control parameter to approximate the sign function
     eps: float
         a parameter to smooth the function and avoid division by 0
-
+    
     Methods
     -------
     forward(contour)
@@ -106,11 +109,13 @@ class Contour_to_distance_map(nn.Module):
     """
 
     def __init__(self, size, k=1e5, eps=1e-5):
+
+
         """
         Parameters
         ----------
         size: int
-            the size of the output image
+            the size of the output image 
         k: float
             the control parameter to approximate the sign function
         eps: float
@@ -121,18 +126,7 @@ class Contour_to_distance_map(nn.Module):
         self.k = k
         self.eps = eps
         self.size = size
-
-
-    def forward(self, contour):
-        """Return the distance map of the given size given the contour.
-
-        Raises
-        ------
-        ValueError
-            If the values of the contour or not between 0 and 1.
-        """
-        b = contour.shape[0]
-        mesh = (
+        self.mesh = (
             torch.unsqueeze(
                 torch.stack(
                     torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
@@ -142,29 +136,35 @@ class Contour_to_distance_map(nn.Module):
             )
             / self.size
         )
-        mesh = mesh.unsqueeze(0).repeat(b,1,1,1)
+
+    def forward(self, contour):
+
+        """Return the distance map of the given size given the contour.
+
+        Raises
+        ------
+        ValueError
+            If the values of the contour or not between 0 and 1.
+        """
 
         if (contour < 0).any() or (contour > 1).any():
             raise ValueError("Tensor values should be in the range [0, 1]")
-        
-
-
-        contour = torch.unsqueeze(contour, dim=1)
-        diff = - mesh + contour
-        min_diff = torch.min(torch.norm(diff, dim=-1), dim=2)[0]
-        print(min_diff.shape)
-        min_diff = min_diff.reshape((b,self.size, self.size))
-        roll_diff = torch.roll(diff, -1, dims=2)
-        sign = diff * torch.roll(roll_diff, 1, dims=3)
-        sign = sign[:, :, :, 1] - sign[:, :, :, 0]
+                
+        contour = torch.unsqueeze(contour, dim=0)
+        diff = -self.mesh + contour
+        min_diff = torch.min(torch.norm(diff, dim=-1), dim=1)[0]
+        min_diff = min_diff.reshape((self.size, self.size))
+        roll_diff = torch.roll(diff, -1, dims=1)
+        sign = diff * torch.roll(roll_diff, 1, dims=2)
+        sign = sign[:, :, 1] - sign[:, :, 0]
         sign = torch.tanh(self.k * sign)
-        norm_diff = torch.clip(torch.norm(diff, dim=3), self.eps, None)
-        norm_roll = torch.clip(torch.norm(roll_diff, dim=3), self.eps, None)
-        scalar_product = torch.sum(diff * roll_diff, dim=3)
+        norm_diff = torch.clip(torch.norm(diff, dim=2), self.eps, None)
+        norm_roll = torch.clip(torch.norm(roll_diff, dim=2), self.eps, None)
+        scalar_product = torch.sum(diff * roll_diff, dim=2)
         clip = torch.clip(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
         angles = torch.arccos(clip)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
-        sum_angles = torch.sum(sign * angles, dim=2) / (2 * torch.pi)
-        resize = sum_angles.reshape(b, self.size, self.size)
+        sum_angles = torch.sum(sign * angles, dim=1) / (2 * torch.pi)
+        resize = sum_angles.reshape(1, self.size, self.size)
         dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff), 0)
         return dmap
