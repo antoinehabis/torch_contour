@@ -49,7 +49,7 @@ import matplotlib.pyplot as plt
 x = torch.tensor([[0.1,0.1],
                   [0.1,0.9],
                   [0.9,0.9],
-                  [0.9,0.1]])
+                  [0.9,0.1]])[None]
 
 Dmap = Contour_to_distance_map(200)
 Mask = Contour_to_mask(200)
