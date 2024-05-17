@@ -35,10 +35,6 @@ with $H$ and $W$ respectively the Heigh and Width of the distance map or mask.
 
 The polygon must have values between 0 and 1. It is therefore important to apply a sigmoid function before the layer.*.
 
-The predicted polygon must be ordered in counter-clockwise.
-
-
-
 ## Example:
 
  ```

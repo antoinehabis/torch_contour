@@ -78,7 +78,7 @@ class Contour_to_mask(nn.Module):
         clip = torch.clamp(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
         angles = torch.acos(clip)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
-        sum_angles = torch.clamp(torch.sum(sign * angles, dim=2) / (2 * torch.pi), 0, 1)
+        sum_angles = torch.clamp(torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi)), 0, 1)
         out0 = sum_angles.reshape(b, self.size, self.size)
         mask = torch.unsqueeze(out0, dim=0)
         
@@ -164,7 +164,7 @@ class Contour_to_distance_map(nn.Module):
         clip = torch.clip(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
         angles = torch.arccos(clip)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
-        sum_angles = torch.sum(sign * angles, dim=2) / (2 * torch.pi)
+        sum_angles = torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi))
         resize = sum_angles.reshape(b, self.size, self.size)
         dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff), 0)
         return dmap
