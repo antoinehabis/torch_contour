@@ -61,6 +61,7 @@ class Contour_to_mask(nn.Module):
             / self.size
         )
         mesh = mesh.unsqueeze(0).repeat(b,1,1,1)
+        torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
         if (contour < 0).any() or (contour > 1).any():
             raise ValueError("Tensor values should be in the range [0, 1]")
@@ -77,7 +78,6 @@ class Contour_to_mask(nn.Module):
 
         clip = torch.clamp(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
         angles = torch.acos(clip)
-        torch.pi = torch.acos(torch.zeros(1)).item() * 2
         sum_angles = torch.clamp(torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi)), 0, 1)
         out0 = sum_angles.reshape(b, self.size, self.size)
         mask = torch.unsqueeze(out0, dim=0)
@@ -143,6 +143,7 @@ class Contour_to_distance_map(nn.Module):
             / self.size
         )
         mesh = mesh.unsqueeze(0).repeat(b,1,1,1)
+        torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
         if (contour < 0).any() or (contour > 1).any():
             raise ValueError("Tensor values should be in the range [0, 1]")
@@ -152,7 +153,6 @@ class Contour_to_distance_map(nn.Module):
         contour = torch.unsqueeze(contour, dim=1)
         diff = - mesh + contour
         min_diff = torch.min(torch.norm(diff, dim=-1), dim=2)[0]
-        print(min_diff.shape)
         min_diff = min_diff.reshape((b,self.size, self.size))
         roll_diff = torch.roll(diff, -1, dims=2)
         sign = diff * torch.roll(roll_diff, 1, dims=3)
@@ -163,8 +163,8 @@ class Contour_to_distance_map(nn.Module):
         scalar_product = torch.sum(diff * roll_diff, dim=3)
         clip = torch.clip(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
         angles = torch.arccos(clip)
-        torch.pi = torch.acos(torch.zeros(1)).item() * 2
         sum_angles = torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi))
         resize = sum_angles.reshape(b, self.size, self.size)
         dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff), 0)
+
         return dmap
