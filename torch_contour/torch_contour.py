@@ -168,3 +168,82 @@ class Contour_to_distance_map(nn.Module):
         dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff), 0)
 
         return dmap
+    
+
+
+    
+    
+
+def area(polygons):
+    """
+    Computes the area using the shoelace formula (also known as Gauss's area formula) for polygons.
+
+    Parameters:
+    x (torch.Tensor): A 3D tensor of shape (B, 2, N) where B is the batch size, 
+                    2 represents the coordinates (x, y) of each point, 
+                    and N is the number of points in each polygon.
+
+    Returns:
+    torch.Tensor: A 1D tensor of shape (B,N,) containing the area of each polygon in the batch.
+
+    """
+    
+    y = torch.prod(torch.roll(polygons[:,1,:],shifts=-1,dims=1), dim = 1)
+    z = torch.prod(torch.roll(polygons[:,1,:],shifts=1,dims=1), dim = 1)
+
+    return (torch.abs(y-z)/2.)[None]
+
+
+
+def perimeter(polygons):
+    """
+    Computes the perimeter of each polygon in a batch of 2D polygons.
+
+    Parameters:
+    polygons (torch.Tensor): A 3D tensor of shape (B, 2, N) where B is the batch size,
+                             N is the number of points in each polygon, and 2 represents
+                             the coordinates (x, y) of each point.
+
+    Returns:
+    torch.Tensor: A 1D tensor of shape (B,) containing the perimeter of each polygon in the batch.
+    """
+    # Calculate the distance between consecutive points
+    distances = torch.sqrt(torch.sum((polygons - torch.roll(polygons, shifts=-1, dims=2)) ** 2, dim=1))
+    # Sum the distances for each polygon to get the perimeter
+    perimeters = torch.sum(distances, dim=-1)
+    
+    return perimeters
+
+
+
+def hausdorff_distance(polygons1, polygons2):
+    """
+    Computes the Hausdorff distance between two batches of 2D polygons.
+
+    Parameters:
+    polygons1 (torch.Tensor): A tensor of shape (B, 2, N) representing the first batch of polygons,
+                        where B is the batch size and N is the number of points in each polygon.
+    polygons2 (torch.Tensor): A tensor of shape (B, 2, N) representing the second batch of polygons,
+                        where B is the batch size and N is the number of points in each polygon.
+
+    Returns:
+    torch.Tensor: A 1D tensor of shape (B,) containing the Hausdorff distance for each pair of polygons.
+    """
+    # Compute pairwise distances
+    polygons1 = polygons1.permute(0, 2, 1)  # (B, N, 1, 2)
+    polygons2 = polygons2.permute(0, 2, 1)  # (B, 1, N, 2)
+
+    dists = torch.cdist(polygons1, polygons2)  # (B, N, N)
+    # Compute the directed Hausdorff distances
+    min_dist_polygons1_to_polygons2, _ = torch.min(dists, dim=2)  # (B, N)
+    min_dist_polygons2_to_polygons1, _ = torch.min(dists, dim=1)  # (B, N)
+
+    # Max of the minimum distances
+    hausdorff_dist_polygons1_to_polygons2 = torch.max(min_dist_polygons1_to_polygons2, dim=1).values  # (B,)
+    hausdorff_dist_polygons2_to_polygons1 = torch.max(min_dist_polygons2_to_polygons1, dim=1).values  # (B,)
+
+    # Final Hausdorff distance is the maximum of both directed distances
+    hausdorff_dist = torch.max(hausdorff_dist_polygons1_to_polygons2, hausdorff_dist_polygons2_to_polygons1)
+
+    return hausdorff_dist
+

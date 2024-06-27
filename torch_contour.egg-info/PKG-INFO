@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 1.0.0
+Version: 1.0.1
 Summary: Differentiable contour to mask and contour to distance map implementation with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
@@ -51,12 +51,13 @@ with $n$ the number of nodes
 
 ## Output (Float):
 
-A mask or distance map of size $1 \times H \times W$.\
-with $H$ and $W$ respectively the Heigh and Width of the distance map or mask.
+A mask or distance map of size $B \times H \times W$.\
+with $H$ and $W$ respectively the Heigh and Width of the distance map or mask and $B$ the batch size
 
 ## Important: 
 
-The polygon must have values between 0 and 1. It is therefore important to apply a sigmoid function before the layer.*.
+The polygon must have values between 0 and 1. 
+
 
 ## Example:
 

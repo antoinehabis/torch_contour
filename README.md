@@ -9,7 +9,9 @@
 </p>
 </figure>
 
-This library contains 2 pytorch layers for performing the diferentiable operations of :
+# Pytorch Layers
+
+This library contains 2 pytorch non trainable layers for performing the differentiable operations of :
 
 1. contour to mask
 2. contour to distance map. 
@@ -18,18 +20,16 @@ It can therefore be used to transform a polygon into a binary mask or distance m
 In particular, it can be used to transform the detection task into a segmentation task.
 The two layers have no learnable weight, so all it does is apply a function in a derivative way.
 
-
-
 ## Input (Float):
 
-A polygon of size $2 \times n$ with \
-with $n$ the number of nodes
+A polygon of size $B \times 2 \times n$ with \
+with $n$ the number of nodes and $B$ the batch size
 
 
 ## Output (Float):
 
-A mask or distance map of size $B \times H \times W$.\
-with $H$ and $W$ respectively the Heigh and Width of the distance map or mask and $B$ the batch size
+A mask or distance map of size $B \times H \times H$.\
+with $H$ the Heigh of the distance map or mask and $B$ the batch size
 
 ## Important: 
 
@@ -56,4 +56,37 @@ plt.show()
 plt.imshow(Mask(x).cpu().detach().numpy()[0,0])
 plt.show()
 ```
+
+# Pytorch functions
+
+This library also contains batch torch operations for performing:
+
+1. The area of a batch of polygons
+2. The perimeter of a batch of polygons
+3. The haussdorf distance between 2 sets of polygons
+
+
+ ```
+from torch_contour.torch_contour import area, perimeter, haussdorf_distance
+import torch
+
+polygons1 = torch.tensor([
+    [[0, 0], [1, 0], [1, 1], [0, 1]],  # Square
+    [[0, 0], [2, 0], [2, 1], [0, 1]]   # Rectangle
+], dtype=torch.float32).permute(0, 2, 1)  # Permute to shape (B, 2, N)
+polygons2 = torch.tensor([
+    [[0, 0], [1, 0], [1, 1], [0, 1]],  # Another Square
+    [[0, 0], [2, 0], [2, 2], [0, 2]]   # Another Rectangle
+], dtype=torch.float32).permute(0, 2, 1)  # Permute to shape (B, 2, N)
+
+
+area_ = area(polygons1)
+perimeter_ = perimeter(polygons2)
+hausdorff_dists = hausdorff_distance(polygons1, polygons2)
+```
+
+
+
+
+
 
