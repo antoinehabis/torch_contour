@@ -47,14 +47,16 @@ The two layers have no learnable weight, so all it does is apply a function in a
 
 ## Input (Float):
 
-A polygon of size $B \times 2 \times N$ with \
-with $N$ the number of nodes and $B$ the batch size
+A polygon of size $B \times 2 \times N$ with:\
+$N$ the number of nodes\
+$B$ the batch size
 
 
 ## Output (Float):
 
-A mask or distance map of shape $B \times H \times H$.\
-with $H$ the Heigh of the distance map or mask and $B$ the batch size
+A mask or distance map of shape $B \times H \times H$ with :\
+$H$ the Heigh of the distance map or mask\
+$B$ the batch size
 
 ## Important: 
 
