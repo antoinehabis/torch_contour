@@ -5,11 +5,11 @@
   <img 
   src="https://github.com/antoinehabis/torch_contour/blob/main/vary_nodes.jpg?raw=True"
   alt="Example of torch contour on a circle when varying the number of nodes"
-  width="250">
-  <figcaption>Example of torch contour on a circle when varying the number of nodes</figcaption>
+  width="500">
+  <figcaption> Example of output of contour to mask and contour to distance map  on a polygon in the form of a circle when varying the number of nodes</figcaption>
 </p>
 </figure>
-![](https://github.com/antoinehabis/torch_contour/blob/main/vary_nodes.jpg?raw=True)
+<!-- ![](https://github.com/antoinehabis/torch_contour/blob/main/vary_nodes.jpg?raw=True) -->
 
 # Pytorch Layers
 
