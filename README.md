@@ -71,7 +71,7 @@ This library also contains batch torch operations for performing:
 
 
  ```
-from torch_contour.torch_contour import area, perimeter, haussdorf_distance
+from torch_contour.torch_contour import area, perimeter, hausdorf_distance
 import torch
 
 polygons1 = torch.tensor([

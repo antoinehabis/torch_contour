@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 1.0.4
+Version: 1.0.5
 Summary: Differentiable contour to mask and contour to distance map implementation with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
