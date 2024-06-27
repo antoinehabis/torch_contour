@@ -30,7 +30,7 @@ with $N$ the number of nodes and $B$ the batch size
 
 ## Output (Float):
 
-A mask or distance map of size $B \times H \times H$.\
+A mask or distance map of shape $B \times H \times H$.\
 with $H$ the Heigh of the distance map or mask and $B$ the batch size
 
 ## Important: 
