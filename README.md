@@ -1,13 +1,15 @@
 # torch_contour
+
 <figure>
 <p align="center">
   <img 
-  src="vary_nodes.jpg"
+  src="https://github.com/antoinehabis/torch_contour/blob/main/vary_nodes.jpg?raw=True"
   alt="Example of torch contour on a circle when varying the number of nodes"
-  width="500">
+  width="250">
   <figcaption>Example of torch contour on a circle when varying the number of nodes</figcaption>
 </p>
 </figure>
+![](https://github.com/antoinehabis/torch_contour/blob/main/vary_nodes.jpg?raw=True)
 
 # Pytorch Layers
 
@@ -18,12 +20,12 @@ This library contains 2 pytorch non trainable layers for performing the differen
 
 It can therefore be used to transform a polygon into a binary mask or distance map in a completely differentiable way.
 In particular, it can be used to transform the detection task into a segmentation task.
-The two layers have no learnable weight, so all it does is apply a function in a derivative way.
+The two layers have no learnable weight, so all it does is apply a function in a differentiable way.
 
 ## Input (Float):
 
-A polygon of size $B \times 2 \times n$ with \
-with $n$ the number of nodes and $B$ the batch size
+A polygon of size $B \times 2 \times N$ with \
+with $N$ the number of nodes and $B$ the batch size
 
 
 ## Output (Float):
