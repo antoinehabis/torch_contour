@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 1.0.5
+Version: 1.0.6
 Summary: Differentiable contour to mask and contour to distance map implementation with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
@@ -94,7 +94,7 @@ This library also contains batch torch operations for performing:
 
 
  ```
-from torch_contour.torch_contour import area, perimeter, haussdorf_distance
+from torch_contour.torch_contour import area, perimeter, hausdorf_distance
 import torch
 
 polygons1 = torch.tensor([

@@ -38,7 +38,16 @@ class Contour_to_mask(nn.Module):
         self.k = k
         self.eps = eps
         self.size = size
-
+        self.mesh = (
+            torch.unsqueeze(
+                torch.stack(
+                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
+                    dim=-1,
+                ).reshape(-1, 2),
+                dim=1,
+            )
+            / self.size
+        )
 
     def forward(self, contour):
         """Return the distance map of the given size given the contour.
@@ -50,17 +59,7 @@ class Contour_to_mask(nn.Module):
         """
 
         b = contour.shape[0]
-        mesh = (
-            torch.unsqueeze(
-                torch.stack(
-                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
-                    dim=-1,
-                ).reshape(-1, 2),
-                dim=1,
-            )
-            / self.size
-        )
-        mesh = mesh.unsqueeze(0).repeat(b,1,1,1)
+        mesh = self.mesh.unsqueeze(0).repeat(b, 1, 1, 1)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
         if (contour < 0).any() or (contour > 1).any():
@@ -81,7 +80,7 @@ class Contour_to_mask(nn.Module):
         sum_angles = torch.clamp(torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi)), 0, 1)
         out0 = sum_angles.reshape(b, self.size, self.size)
         mask = torch.unsqueeze(out0, dim=0)
-        
+
         return mask
 
 
@@ -121,7 +120,16 @@ class Contour_to_distance_map(nn.Module):
         self.k = k
         self.eps = eps
         self.size = size
-
+        self.mesh = (
+            torch.unsqueeze(
+                torch.stack(
+                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
+                    dim=-1,
+                ).reshape(-1, 2),
+                dim=1,
+            )
+            / self.size
+        )
 
     def forward(self, contour):
         """Return the distance map of the given size given the contour.
@@ -132,28 +140,16 @@ class Contour_to_distance_map(nn.Module):
             If the values of the contour or not between 0 and 1.
         """
         b = contour.shape[0]
-        mesh = (
-            torch.unsqueeze(
-                torch.stack(
-                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
-                    dim=-1,
-                ).reshape(-1, 2),
-                dim=1,
-            )
-            / self.size
-        )
-        mesh = mesh.unsqueeze(0).repeat(b,1,1,1)
+        mesh = self.mesh.unsqueeze(0).repeat(b, 1, 1, 1)
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
         if (contour < 0).any() or (contour > 1).any():
             raise ValueError("Tensor values should be in the range [0, 1]")
-        
-
 
         contour = torch.unsqueeze(contour, dim=1)
-        diff = - mesh + contour
+        diff = -mesh + contour
         min_diff = torch.min(torch.norm(diff, dim=-1), dim=2)[0]
-        min_diff = min_diff.reshape((b,self.size, self.size))
+        min_diff = min_diff.reshape((b, self.size, self.size))
         roll_diff = torch.roll(diff, -1, dims=2)
         sign = diff * torch.roll(roll_diff, 1, dims=3)
         sign = sign[:, :, :, 1] - sign[:, :, :, 0]
@@ -168,30 +164,101 @@ class Contour_to_distance_map(nn.Module):
         dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff), 0)
 
         return dmap
-    
 
+class Draw_contour(nn.Module):
+    """This layer draws a contour
 
-    
-    
+    ...
+
+    Attributes
+    ----------
+    size: int
+        the size of the output image
+    k: float
+        the control parameter to approximate the sign function
+
+    Methods
+    -------
+    forward(contour)
+        forward function that draws the contour
+    """
+
+    def __init__(self, size, k=1e5):
+        """
+        Parameters
+        ----------
+        size: int
+            the size of the output image
+        k: float
+            the control parameter to approximate the dirac function
+
+        """
+        super().__init__()
+        self.k = k
+        self.size = size
+
+        self.mesh = (
+            torch.unsqueeze(
+                torch.stack(
+                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
+                    dim=-1,
+                ).reshape(-1, 2),
+                dim=1,
+            )
+            / self.size
+        )
+
+    def forward(self, contour):
+        """Return the contour drawn on an image of the given size .
+
+        Raises
+        ------
+        ValueError
+            If the values of the contour or not between 0 and 1.
+        """
+
+        b, n, _ = contour.shape
+        mesh = self.mesh.unsqueeze(0).repeat(b, 1, 1, 1)
+        torch.pi = torch.acos(torch.zeros(1)).item() * 2
+
+        if (contour < 0).any() or (contour > 1).any():
+            raise ValueError("Tensor values should be in the range [0, 1]")
+
+        contour = torch.unsqueeze(contour, dim=1)
+        diff = -mesh + contour
+        roll_diff = torch.roll(diff, -1, dims=2)
+        x = torch.max(torch.exp(-self.k * torch.sum(diff**2, -1).reshape(b, -1, n)), dim=-1)[0].reshape(
+            b, self.size, self.size
+        )
+        roll_diff = torch.roll(diff, -1, dims=2)
+        norm_diff = torch.linalg.vector_norm(diff, dim=3)
+        norm_roll = torch.linalg.vector_norm(roll_diff, dim=3)
+        scalar_product = torch.sum(diff * roll_diff, dim=3)
+        clip = scalar_product / (norm_diff * norm_roll)
+        angles = torch.max(torch.exp(-self.k * (-1 - clip) ** 2), axis=-1)[0]
+        contour_drawn = angles.reshape(b, self.size, self.size) + x
+
+        return contour_drawn[:,None,...]
+
 
 def area(polygons):
     """
     Computes the area using the shoelace formula (also known as Gauss's area formula) for polygons.
 
     Parameters:
-    x (torch.Tensor): A 3D tensor of shape (B, 2, N) where B is the batch size, 
-                    2 represents the coordinates (x, y) of each point, 
+    x (torch.Tensor): A 3D tensor of shape (B, N, 2) where B is the batch size,
+                    2 represents the coordinates (x, y) of each point,
                     and N is the number of points in each polygon.
 
     Returns:
-    torch.Tensor: A 1D tensor of shape (B,N,) containing the area of each polygon in the batch.
+    torch.Tensor: A 1D tensor of shape (B,) containing the area of each polygon in the batch.
 
     """
-    
-    y = torch.prod(torch.roll(polygons[:,1,:],shifts=-1,dims=1), dim = 1)
-    z = torch.prod(torch.roll(polygons[:,1,:],shifts=1,dims=1), dim = 1)
 
-    return (torch.abs(y-z)/2.)[None]
+    y = torch.roll(polygons[:,:,1], shifts=-1, dims=1)
+    z = torch.roll(polygons[:,:,0], shifts=-1, dims=1)
+    return torch.abs(torch.sum(polygons[:,:,1] * y + polygons[:,:,0] * z,dim=-1))/2.
+
 
 
 
@@ -200,7 +267,7 @@ def perimeter(polygons):
     Computes the perimeter of each polygon in a batch of 2D polygons.
 
     Parameters:
-    polygons (torch.Tensor): A 3D tensor of shape (B, 2, N) where B is the batch size,
+    polygons (torch.Tensor): A 3D tensor of shape (B, N, 2) where B is the batch size,
                              N is the number of points in each polygon, and 2 represents
                              the coordinates (x, y) of each point.
 
@@ -208,12 +275,11 @@ def perimeter(polygons):
     torch.Tensor: A 1D tensor of shape (B,) containing the perimeter of each polygon in the batch.
     """
     # Calculate the distance between consecutive points
-    distances = torch.sqrt(torch.sum((polygons - torch.roll(polygons, shifts=-1, dims=2)) ** 2, dim=1))
+    distances = torch.sqrt(torch.sum((polygons - torch.roll(polygons, shifts=-1, dims=1)) ** 2, dim=2))
     # Sum the distances for each polygon to get the perimeter
     perimeters = torch.sum(distances, dim=-1)
-    
-    return perimeters
 
+    return perimeters
 
 
 def hausdorff_distance(polygons1, polygons2):
@@ -221,18 +287,15 @@ def hausdorff_distance(polygons1, polygons2):
     Computes the Hausdorff distance between two batches of 2D polygons.
 
     Parameters:
-    polygons1 (torch.Tensor): A tensor of shape (B, 2, N) representing the first batch of polygons,
+    polygons1 (torch.Tensor): A tensor of shape (B, N, 2) representing the first batch of polygons,
                         where B is the batch size and N is the number of points in each polygon.
-    polygons2 (torch.Tensor): A tensor of shape (B, 2, N) representing the second batch of polygons,
+    polygons2 (torch.Tensor): A tensor of shape (B, N, 2) representing the second batch of polygons,
                         where B is the batch size and N is the number of points in each polygon.
 
     Returns:
     torch.Tensor: A 1D tensor of shape (B,) containing the Hausdorff distance for each pair of polygons.
     """
     # Compute pairwise distances
-    polygons1 = polygons1.permute(0, 2, 1)  # (B, N, 1, 2)
-    polygons2 = polygons2.permute(0, 2, 1)  # (B, 1, N, 2)
-
     dists = torch.cdist(polygons1, polygons2)  # (B, N, N)
     # Compute the directed Hausdorff distances
     min_dist_polygons1_to_polygons2, _ = torch.min(dists, dim=2)  # (B, N)
@@ -246,4 +309,3 @@ def hausdorff_distance(polygons1, polygons2):
     hausdorff_dist = torch.max(hausdorff_dist_polygons1_to_polygons2, hausdorff_dist_polygons2_to_polygons1)
 
     return hausdorff_dist
-
