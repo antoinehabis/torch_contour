@@ -60,8 +60,12 @@ class Contour_to_mask(nn.Module):
         """
 
         b, n, k, _ = contour.shape
+        device = contour.get_device()
         contour = contour.reshape(b * n, k, -1)
         mesh = self.mesh.unsqueeze(0).repeat(b * n, 1, 1, 1)
+        if device == -0:
+            mesh = mesh.cuda()
+
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
         if (contour < 0).any() or (contour > 1).any():
@@ -157,8 +161,11 @@ class Contour_to_distance_map(nn.Module):
         """
 
         b, n, k, _ = contour.shape
-        contour = contour.reshape(b * n, k, _)
+        device = contour.get_device()
+        contour = contour.reshape(b * n, k, -1)
         mesh = self.mesh.unsqueeze(0).repeat(b * n, 1, 1, 1)
+        if device == -0:
+            mesh = mesh.cuda()
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
         if (contour < 0).any() or (contour > 1).any():
@@ -184,12 +191,10 @@ class Contour_to_distance_map(nn.Module):
         return dmap
 
 
-
-
 class Sobel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.filter = nn.Conv2d(in_channels=1, out_channels=2, kernel_size=3, stride=1, padding=(1,1), bias=False)
+        self.filter = nn.Conv2d(in_channels=1, out_channels=2, kernel_size=3, stride=1, padding=(1, 1), bias=False)
 
         Gx = torch.tensor([[2.0, 0.0, -2.0], [4.0, 0.0, -4.0], [2.0, 0.0, -2.0]])
         Gy = torch.tensor([[2.0, 4.0, 2.0], [0.0, 0.0, 0.0], [-2.0, -4.0, -2.0]])
@@ -202,10 +207,10 @@ class Sobel(nn.Module):
         x = torch.mul(x, x)
         x = torch.sum(x, dim=1, keepdim=True)
         x = torch.sqrt(x)
-        x[:,:,-1,:] = 0
-        x[:,:,:,-1] = 0
-        x[:,:,0,:] = 0
-        x[:,:,:,0] = 0
+        x[:, :, -1, :] = 0
+        x[:, :, :, -1] = 0
+        x[:, :, 0, :] = 0
+        x[:, :, :, 0] = 0
 
         return x
 
@@ -249,7 +254,7 @@ class Draw_contour(nn.Module):
         self.max_ = nn.MaxPool2d(
             kernel_size=(self.thickness, self.thickness),
             stride=1,
-            padding=(self.thickness//2, self.thickness//2),
+            padding=(self.thickness // 2, self.thickness // 2),
             dilation=1,
             return_indices=False,
             ceil_mode=False,
@@ -283,14 +288,17 @@ class Draw_contour(nn.Module):
         if (contour < 0).any() or (contour > 1).any():
             raise ValueError("Tensor values should be in the range [0, 1]")
 
-        b, n, k,_ = contour.shape
+        b, n, k, _ = contour.shape
+
         mask = self.ctm(contour)
         drawn = self.sobel(mask)
         drawn = self.max_(drawn)
-        drawn = drawn.reshape(b,n,self.size*self.size)
-        drawn = (drawn - torch.min(drawn, dim=-1)[0])/(torch.max(drawn, dim = -1)[0] - torch.min(drawn, dim = -1)[0] + 1e-9)
-        return drawn.reshape(b,n, self.size, self.size)
-    
+        drawn = drawn.reshape(b, n, self.size * self.size)
+        drawn = (drawn - torch.min(drawn, dim=-1)[0]) / (
+            torch.max(drawn, dim=-1)[0] - torch.min(drawn, dim=-1)[0] + 1e-9
+        )
+        return drawn.reshape(b, n, self.size, self.size)
+
 
 def area(contours):
     """Return the area of each polygon of each batch
@@ -383,7 +391,6 @@ def hausdorff_distance(contours1, contours2):
 
 
 def curvature(contour):
-    
     """
     Computes the curvature of a given contour.
 
@@ -416,15 +423,17 @@ def curvature(contour):
     torch.Size([1, 1, 4])
     """
 
-    contour = torch.cat([contour[:,:,-3:, :], contour, contour[:,:,:3,:]],dim=-2)
-    b,n,k,_ = contour.shape
-    contour = contour.reshape(b*n, k, -1)
-    velocity = torch.gradient(contour, dim =1)[0]
-    ds_dt = torch.norm(velocity,dim = -1)
+    contour = torch.cat([contour[:, :, -3:, :], contour, contour[:, :, :3, :]], dim=-2)
+    b, n, k, _ = contour.shape
+    contour = contour.reshape(b * n, k, -1)
+    velocity = torch.gradient(contour, dim=1)[0]
+    ds_dt = torch.norm(velocity, dim=-1)
     accel = torch.gradient(velocity, dim=1)[0]
-    curvature = torch.abs(accel[:,:,0] * velocity[:,:,1] - velocity[:,:,0] * accel[:,:,1]) / torch.sum(velocity**2,dim=-1)**1.5
-    curvature = curvature.reshape(b,n,k,-1)
-    curvature = curvature[:,:,3:-3,0]
+    curvature = (
+        torch.abs(accel[:, :, 0] * velocity[:, :, 1] - velocity[:, :, 0] * accel[:, :, 1])
+        / torch.sum(velocity**2, dim=-1) ** 1.5
+    )
+    curvature = curvature.reshape(b, n, k, -1)
+    curvature = curvature[:, :, 3:-3, 0]
 
-
-    return curvature 
+    return curvature
