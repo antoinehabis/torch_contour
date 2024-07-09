@@ -105,15 +105,16 @@ polygons1 = torch.tensor([[[[0.1640, 0.5085],
           [0.1640, 0.5085]]]], dtype=torch.float32)  
 
 
-Dmap = Contour_to_distance_map(200)
 Mask = Contour_to_mask(200)
 Draw = Draw_contour(200)
+Dmap = Contour_to_distance_map(200)
 
-plt.imshow(Dmap(polygons1).cpu().detach().numpy()[0,0])
-plt.show()
+
 plt.imshow(Mask(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
 plt.imshow(Draw(polygons1).cpu().detach().numpy()[0,0])
+plt.show()
+plt.imshow(Dmap(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
 ```
 
