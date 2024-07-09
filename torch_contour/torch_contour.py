@@ -380,3 +380,51 @@ def hausdorff_distance(contours1, contours2):
     hausdorff_dist = torch.max(hausdorff_dist_contours1_to_contours2, hausdorff_dist_contours2_to_contours1)
 
     return hausdorff_dist.reshape((b, n))
+
+
+def curvature(contour):
+    
+    """
+    Computes the curvature of a given contour.
+
+    This function calculates the curvature of a 2D contour represented as a tensor.
+    The input contour is extended at the beginning and end to handle boundary conditions
+    for gradient computation. The function then computes the velocity and acceleration
+    of the contour points, and finally calculates the curvature using these values.
+
+    Parameters:
+    -----------
+    contour : torch.Tensor
+        A tensor of shape (B, N, K, 2), where:
+        - B is the batch size
+        - N is the number of contours in a batch
+        - K is the number of points in each contour
+        - 2 represents the x and y coordinates of each point
+
+    Returns:
+    --------
+    torch.Tensor
+        A tensor of shape (B, N, K-6) representing the curvature of each point
+        in the contour, excluding the boundary points used for padding.
+
+    Example:
+    --------
+    >>> import torch
+    >>> contour = torch.rand(1, 1, 10, 2)  # Example contour with random points
+    >>> curv = curvature(contour)
+    >>> print(curv.shape)
+    torch.Size([1, 1, 4])
+    """
+
+    contour = torch.cat([contour[:,:,-3:, :], contour, contour[:,:,:3,:]],dim=-2)
+    b,n,k,_ = contour.shape
+    contour = contour.reshape(b*n, k, -1)
+    velocity = torch.gradient(contour, dim =1)[0]
+    ds_dt = torch.norm(velocity,dim = -1)
+    accel = torch.gradient(velocity, dim=1)[0]
+    curvature = torch.abs(accel[:,:,0] * velocity[:,:,1] - velocity[:,:,0] * accel[:,:,1]) / torch.sum(velocity**2,dim=-1)**1.5
+    curvature = curvature.reshape(b,n,k,-1)
+    curvature = curvature[:,:,3:-3,0]
+
+
+    return curvature 

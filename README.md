@@ -20,26 +20,26 @@ This library contains 3 pytorch non trainable layers for performing the differen
 3. draw contour. 
 
 
-It can therefore be used to transform a polygon into a binary mask or distance map in a completely differentiable way.
-In particular, it can be used to transform the detection task into a segmentation task.
+It can therefore be used to transform a polygon into a binary mask/distance map/ drawn contour in a completely differentiable way.
+In particular, it can be used to transform the detection task into a segmentation task or do detection with any polygon.
 
 The three layers have no learnable weight.
 All they do is to apply a function in a differentiable way.
 
 ## Input (Float):
 
-A list of polygons of size $B \times N \times K \times 2$ with:\
-$B$ the batch size\
-$N$ the number of polygons for each image\
-$K$ the number of nodes for each polygon
+A list of polygons of shape $B \times N \times K \times 2$ with:
+* $B$ the batch size
+* $N$ the number of polygons for each image
+* $K$ the number of nodes for each polygon
 
 
 ## Output (Float):
 
-A mask or distance map of shape $B \times N \times H \times H$ with :\
-$B$ the batch size
-$N$ the number of polygons for each image\
-$H$ the Heigh of the distance map or mask\
+A mask/distance map/contour drawn of shape $B \times N \times H \times H$ with :
+* $B$ the batch size
+* $N$ the number of polygons for each image
+* $H$ the Heigh of the distance map or mask
 
 ## Important: 
 
@@ -124,11 +124,12 @@ This library also contains batch torch operations for performing:
 
 1. The area of a batch of polygons
 2. The perimeter of a batch of polygons
-3. The haussdorf distance between 2 sets of polygons
+3. The curvature of a batch of polygons
+4. The haussdorf distance between 2 sets of polygons
 
 
  ```
-from torch_contour.torch_contour import area, perimeter, hausdorf_distance
+from torch_contour.torch_contour import area, perimeter, hausdorf_distance, curvature
 import torch
 
 
@@ -184,9 +185,11 @@ polygons2 = torch.tensor([[[[0.0460, 0.3955],
           [0.0460, 0.3955]]]], dtype = torch.float32)  
 
 
-area_ = area(polygons1)
+area_ = area(polygons2)
 perimeter_ = perimeter(polygons2)
+curvs = curvature(polygons2)
 hausdorff_dists = hausdorff_distance(polygons1, polygons2)
+
 ```
 
 

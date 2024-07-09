@@ -1,12 +1,12 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 1.0.8
-Summary: Differentiable contour to mask and contour to distance map implementation with PyTorch
+Version: 1.1.1
+Summary: Differentiable contour to image operations with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
 Author-email: antoine.habis.tlcm@gmail.com
 License: MIT
-Keywords: differentiable contour processing,pytorch,machine learning
+Keywords: differentiable contour processing,pytorch,machine learning,polygon,shape,mask,distance map,draw contour,hausdorff distance
 Classifier: Development Status :: 4 - Beta
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Natural Language :: English
@@ -128,15 +128,16 @@ polygons1 = torch.tensor([[[[0.1640, 0.5085],
           [0.1640, 0.5085]]]], dtype=torch.float32)  
 
 
-Dmap = Contour_to_distance_map(200)
 Mask = Contour_to_mask(200)
 Draw = Draw_contour(200)
+Dmap = Contour_to_distance_map(200)
 
-plt.imshow(Dmap(polygons1).cpu().detach().numpy()[0,0])
-plt.show()
+
 plt.imshow(Mask(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
 plt.imshow(Draw(polygons1).cpu().detach().numpy()[0,0])
+plt.show()
+plt.imshow(Dmap(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
 ```
 
