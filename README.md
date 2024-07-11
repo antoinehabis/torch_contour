@@ -11,19 +11,37 @@
 </figure>
 <!-- ![](https://github.com/antoinehabis/torch_contour/blob/main/vary_nodes.jpg?raw=True) -->
 
+# Overview of the Toolbox 
+
+1. Pytorch layers for differentiable contour (polygon) to image operations.
+
+  * Contour to mask 
+  * Contour to distance map
+  * Draw contour
+
+2. Pytorch functions for contour feature extraction.
+
+  * Area
+  * Perimeter
+  * Curvature
+  * Hausdorff distance
+
+3. Function for NumPy arrays only to remove loops inside contours and interpolate along the given contours.
+
+
 # Pytorch Layers
 
 This library contains 3 pytorch non trainable layers for performing the differentiable operations of :
 
-1. contour to mask
-2. contour to distance map. 
-3. draw contour. 
+1. Contour to mask
+2. Contour to distance map. 
+3. Draw contour. 
 
 
-It can therefore be used to transform a polygon into a binary mask/distance map/ drawn contour in a completely differentiable way.
-In particular, it can be used to transform the detection task into a segmentation task or do detection with any polygon.
-
-The three layers have no learnable weight.
+It can therefore be used to transform a polygon into a binary mask/distance map/ drawn contour in a completely differentiable way.\
+In particular, it can be used to transform the detection task into a segmentation task or do detection with any polygon.\
+The layers in 1, 2, 3 use the nice property of polygons such that for any point inside the sum of oriented angle is $\pm 2\pi$ and quickly converge towards 0 outside.\
+The three layers have no learnable weight.\
 All they do is to apply a function in a differentiable way.
 
 ## Input (Float):
@@ -192,6 +210,15 @@ curvs = curvature(polygons2)
 hausdorff_dists = hausdorff_distance(polygons1, polygons2)
 
 ```
+
+# NumPy remove loops and interpolate
+
+```
+cleaner = CleanContours()
+cleaned_contours = cleaner.clean_contours(polygons2.cpu().detach().numpy())
+cleaned_interpolated_contours = cleaner.clean_contours_and_interpolate(polygons2.cpu().detach().numpy())
+```
+
 
 
 
