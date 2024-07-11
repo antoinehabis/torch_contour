@@ -18,6 +18,7 @@
   * Contour to mask 
   * Contour to distance map
   * Draw contour
+  * Smooth contour
 
 2. Pytorch functions for contour feature extraction.
 
@@ -35,7 +36,8 @@ This library contains 3 pytorch non trainable layers for performing the differen
 
 1. Contour to mask
 2. Contour to distance map. 
-3. Draw contour. 
+3. Draw contour.
+4. Smooth contour
 
 
 It can therefore be used to transform a polygon into a binary mask/distance map/ drawn contour in a completely differentiable way.\
@@ -44,7 +46,9 @@ The layers in 1, 2, 3 use the nice property of polygons such that for any point 
 The three layers have no learnable weight.\
 All they do is to apply a function in a differentiable way.
 
-## Input (Float):
+
+
+## Input (Float) (layer 1, 2, 3, 4):
 
 A list of polygons of shape $B \times N \times K \times 2$ with:
 * $B$ the batch size
@@ -52,12 +56,19 @@ A list of polygons of shape $B \times N \times K \times 2$ with:
 * $K$ the number of nodes for each polygon
 
 
-## Output (Float):
+## Output (Float) (layer 1, 2, 3):
 
 A mask/distance map/contour drawn of shape $B \times N \times H \times H$ with :
 * $B$ the batch size
 * $N$ the number of polygons for each image
 * $H$ the Heigh of the distance map or mask
+
+## Output (Float) (layer 4):
+
+Contours of shape $B \times N \times K \times 2$ with :
+* $B$ the batch size
+* $N$ the number of polygons for each image
+* $K$ the number of nodes for each polygon
 
 ## Important: 
 
@@ -67,7 +78,7 @@ The polygon must have values between 0 and 1.
 ## Example:
 
  ```
-from torch_contour.torch_contour import Contour_to_distance_map, Contour_to_mask, Draw_contour
+from torch_contour.torch_contour import Contour_to_distance_map, Contour_to_mask, Draw_contour, Smoothing
 import torch
 import matplotlib.pyplot as plt
 
@@ -127,7 +138,7 @@ width = 200
 Mask = Contour_to_mask(width)
 Draw = Draw_contour(width)
 Dmap = Contour_to_distance_map(width)
-
+smoother = Smoothing()
 
 plt.imshow(Mask(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
@@ -135,6 +146,9 @@ plt.imshow(Draw(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
 plt.imshow(Dmap(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
+
+smoothed_polygons1_ = smoother(polygons1)
+
 ```
 
 # Pytorch functions

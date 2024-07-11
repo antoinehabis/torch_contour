@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from scipy.interpolate import CubicSpline
+import torch.nn.functional as F
 
 
 class Contour_to_mask(nn.Module):
@@ -299,6 +300,69 @@ class Draw_contour(nn.Module):
             torch.max(drawn, dim=-1)[0] - torch.min(drawn, dim=-1)[0] + 1e-9
         )
         return drawn.reshape(b, n, self.size, self.size)
+
+
+class Smoothing(nn.Module):
+    """
+    A PyTorch module for applying Gaussian smoothing to contour data.
+
+    /!\ The smoothing operation takes into account the fact that the contour is a closed contour.
+    No need to satisfy contour[0] == contour[k-1]
+
+    The sigma smoothing operate on the dimension of the number of nodes k
+
+    Args:
+        sigma (float): The standard deviation of the Gaussian kernel.
+    """
+
+    def __init__(self, sigma):
+        """
+        Initializes the Smoothing module with the specified sigma.
+
+        Args:
+            sigma (float): The standard deviation of the Gaussian kernel.
+        """
+        super(Smoothing, self).__init__()
+        self.sigma = sigma
+        self.kernel = self.define_kernel()
+
+    def define_kernel(self):
+        """
+        Defines the Gaussian kernel based on the specified sigma.
+
+        Returns:
+            torch.Tensor: The Gaussian kernel tensor.
+        """
+        mil = self.sigma * 2 * 5 * 1 // 2  # The filter extends to 5 sigma
+        filter = np.arange(self.sigma * 2 * 5) - mil
+        x = np.exp((-1 / 2) * (filter**2) / (2 * (self.sigma) ** 2))
+        tmp = torch.tensor(x / np.sum(x), dtype=torch.float32)[None, None]
+        return torch.cat([tmp, tmp])
+
+    def forward(self, contours):
+        """
+        Applies Gaussian smoothing to the input contour data.
+
+        Args:
+            contours (torch.Tensor): The input contour tensor of shape (batch_size, num_contours, num_points, 2).
+
+        Returns:
+            torch.Tensor: The smoothed contour tensor.
+        """
+        b, n, k, _ = contours.shape
+        contours = contours.reshape(b * n, k, -1)
+        device = contours.device
+        if device == 0:
+            self.kernel = self.kernel.cuda()
+        margin = k // 2
+        top = contours[:, :margin]
+        bot = contours[:, -margin:]
+
+        out = torch.cat([bot, contours, top], dim=1)
+        out_moved_axis = torch.moveaxis(out, -1, 1)
+
+        smoothed_tensor = F.conv1d(out_moved_axis, self.kernel, padding="same", groups=2)
+        return smoothed_tensor[:, :, margin:-margin].reshape(b, n, k, 2)
 
 
 def area(contours):
