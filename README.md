@@ -11,6 +11,12 @@
 </figure>
 <!-- ![](https://github.com/antoinehabis/torch_contour/blob/main/vary_nodes.jpg?raw=True) -->
 
+# Download
+
+```
+$pip install torch_contour
+```
+
 # Overview of the Toolbox 
 
 1. Pytorch layers for differentiable contour (polygon) to image operations.
@@ -138,7 +144,7 @@ width = 200
 Mask = Contour_to_mask(width)
 Draw = Draw_contour(width)
 Dmap = Contour_to_distance_map(width)
-smoother = Smoothing()
+smoother = Smoothing(sigma=1)
 
 plt.imshow(Mask(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
@@ -148,7 +154,6 @@ plt.imshow(Dmap(polygons1).cpu().detach().numpy()[0,0])
 plt.show()
 
 smoothed_polygons1_ = smoother(polygons1)
-
 ```
 
 # Pytorch functions

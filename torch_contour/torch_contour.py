@@ -62,11 +62,12 @@ class Contour_to_mask(nn.Module):
         """
 
         b, n, k, _ = contour.shape
-        device = contour.get_device()
+        device = contour.device
+        print(device)
         contour = contour.reshape(b * n, k, -1)
         mesh = self.mesh.unsqueeze(0).repeat(b * n, 1, 1, 1)
-        if device == -0:
-            mesh = mesh.cuda()
+        mesh = mesh.to(device)
+
 
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
@@ -163,11 +164,11 @@ class Contour_to_distance_map(nn.Module):
         """
 
         b, n, k, _ = contour.shape
-        device = contour.get_device()
+        device = contour.device
         contour = contour.reshape(b * n, k, -1)
         mesh = self.mesh.unsqueeze(0).repeat(b * n, 1, 1, 1)
-        if device == -0:
-            mesh = mesh.cuda()
+        mesh = mesh.to(device)
+
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
         if (contour < 0).any() or (contour > 1).any():
@@ -352,8 +353,7 @@ class Smoothing(nn.Module):
         b, n, k, _ = contours.shape
         contours = contours.reshape(b * n, k, -1)
         device = contours.device
-        if device == 0:
-            self.kernel = self.kernel.cuda()
+        self.kernel = self.kernel.to(device)
         margin = k // 2
         top = contours[:, :margin]
         bot = contours[:, -margin:]
