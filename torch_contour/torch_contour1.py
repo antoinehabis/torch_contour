@@ -63,7 +63,6 @@ class Contour_to_mask(nn.Module):
 
         b, n, k, _ = contour.shape
         device = contour.device
-        print(device)
         contour = contour.reshape(b * n, k, -1)
         mesh = self.mesh.unsqueeze(0).repeat(b * n, 1, 1, 1)
         mesh = mesh.to(device)
@@ -612,6 +611,7 @@ class CleanContours:
         while True:
             loops = self.find_loops(contour)
             loops_to_remove = [loop[0] for loop in loops if loop[1] < threshold_length]
+            loops_to_remove = np.concatenate(loops_to_remove)
             if not loops_to_remove:
                 break
             mask = np.ones(len(contour), dtype=bool)

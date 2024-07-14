@@ -1,4 +1,4 @@
-from .torch_contour import (
+from .torch_contour1 import (
     Contour_to_mask,
     Contour_to_distance_map,
     Draw_contour,
