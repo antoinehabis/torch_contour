@@ -24,6 +24,7 @@ $pip install torch_contour
   * Contour to mask 
   * Contour to distance map
   * Draw contour
+  * Contour to isolines
   * Smooth contour
 
 2. Pytorch functions for contour feature extraction.
@@ -41,9 +42,10 @@ $pip install torch_contour
 This library contains 3 pytorch non trainable layers for performing the differentiable operations of :
 
 1. Contour to mask
-2. Contour to distance map. 
+2. Contour to distance map.
 3. Draw contour.
-4. Smooth contour
+4. Contour to isolines
+5. Smooth contour
 
 
 It can therefore be used to transform a polygon into a binary mask/distance map/ drawn contour in a completely differentiable way.\
@@ -54,7 +56,7 @@ All they do is to apply a function in a differentiable way.
 
 
 
-## Input (Float) (layer 1, 2, 3, 4):
+## Input (Float) (layer 1, 2, 3, 4, 5):
 
 A list of polygons of shape $B \times N \times K \times 2$ with:
 * $B$ the batch size
@@ -69,7 +71,16 @@ A mask/distance map/contour drawn of shape $B \times N \times H \times H$ with :
 * $N$ the number of polygons for each image
 * $H$ the Heigh of the distance map or mask
 
+
 ## Output (Float) (layer 4):
+
+Isolines of shape $B \times N \times I \times H \times H$ with :
+* $B$ the batch size
+* $N$ the number of polygons for each image
+* $I$ the number of isolines to extract for each image
+* $H$ the Heigh of the distance map or mask
+
+## Output (Float) (layer 5):
 
 Contours of shape $B \times N \times K \times 2$ with :
 * $B$ the batch size
