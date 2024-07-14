@@ -167,7 +167,7 @@ This library also contains batch torch operations for performing:
 
 
  ```
-from torch_contour.torch_contour import area, perimeter, hausdorf_distance, curvature
+from torch_contour.torch_contour import area, perimeter, hausdorff_distance, curvature
 import torch
 
 

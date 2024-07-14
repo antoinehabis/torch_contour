@@ -1,4 +1,4 @@
-from .torch_contour1 import (
+from .torch_contour import (
     Contour_to_mask,
     Contour_to_distance_map,
     Draw_contour,
@@ -25,4 +25,4 @@ __all__ = [
     "hausdorff_distance",
 
 ]
-__version__ = "1.1.7"
+__version__ = "1.1.8"
