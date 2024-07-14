@@ -615,7 +615,7 @@ class CleanContours:
             if not loops_to_remove:
                 break
             mask = np.ones(len(contour), dtype=bool)
-            mask[loops_to_remove] = False
+            mask[np.array(loops_to_remove).flatten()] = False
             contour = contour[mask]
             if not np.array_equal(contour[0], contour[-1]):
                 contour = np.append(contour, [contour[0]], axis=0)

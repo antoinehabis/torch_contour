@@ -25,4 +25,4 @@ __all__ = [
     "hausdorff_distance",
 
 ]
-__version__ = "1.1.6"
+__version__ = "1.1.7"
