@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from scipy.interpolate import CubicSpline
 import torch.nn.functional as F
+from torch import cdist
 
 
 class Contour_to_mask(nn.Module):
@@ -66,7 +67,6 @@ class Contour_to_mask(nn.Module):
         contour = contour.reshape(b * n, k, -1)
         mesh = self.mesh.unsqueeze(0).repeat(b * n, 1, 1, 1)
         mesh = mesh.to(device)
-
 
         torch.pi = torch.acos(torch.zeros(1)).item() * 2
 
@@ -191,6 +191,150 @@ class Contour_to_distance_map(nn.Module):
         dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff), 0)
         dmap = dmap.reshape(b, n, self.size, self.size)
         return dmap
+
+
+class Contour_to_isolines(nn.Module):
+    """This layer transform a polygon into a distance map
+
+    ...
+
+    Attributes
+    ----------
+    size: int
+        the size of the output image
+    isolines: List(float)
+        contains the values of the isolines to extract for each image
+    k: float
+        the control parameter to approximate the sign function
+    eps: float
+        a parameter to smooth the function and avoid division by 0
+
+    Methods
+    -------
+    forward(contour)
+        forward function that turns the contour into a series of isolines centered on the given values
+    """
+
+    def __init__(self, size, isolines, k=1e5, eps=1e-5):
+        """
+        Parameters
+        ----------
+        size: int
+            the size of the output image
+        k: float
+            the control parameter to approximate the sign function
+        eps: float
+            a parameter to smooth the function and avoid division by 0
+        isolines: List(float)
+            contains the values of the isolines to extract for each image
+
+        """
+        super().__init__()
+
+        if any(element < 0 or element > 1 for element in isolines):
+            raise ValueError("all isolines must be in the range [0, 1].")
+
+        self.k = k
+        self.eps = eps
+        self.size = size
+        self.mesh = (
+            torch.unsqueeze(
+                torch.stack(
+                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
+                    dim=-1,
+                ).reshape(-1, 2),
+                dim=1,
+            )
+            / self.size
+        )
+        self.isolines = torch.tensor(isolines)
+        self.vars = self.mean_to_var(self.isolines)
+
+    def mean_to_var(self, isolines):
+        """
+        Computes the variance of the distance between isolines.
+
+        Parameters:
+        self : object
+            The instance of the class where this method is defined.
+        isolines : numpy.ndarray
+            A 1D array of isoline values.
+
+        Returns:
+        numpy.ndarray
+            A 1D array containing the variances corresponding to each isoline value.
+
+        The method works as follows:
+        1. It reshapes the input isolines array to a column vector.
+        2. It computes the squared pairwise distances between all isolines using the cdist function.
+        3. It masks out the zero distances (which are the distances from each point to itself).
+        4. It finds the minimum non-zero distance for each isoline.
+        5. It computes the variance using the formula -min_distance / (8 * np.log(0.5)).
+        """
+        isolines = isolines[:, None]
+        mat = cdist(isolines, isolines) ** 2
+        vars = -np.min(np.ma.masked_equal(mat, 0.0, copy=False), 0) / (8 * np.log(0.5))
+        return vars
+
+    def forward(self, contour):
+        """Return the isolines centered on self.isolines on an image of the given size
+
+        ...
+
+        Parameters
+        ----------
+
+        contour (torch.Tensor): A 4D tensor of shape (B, N, K, 2) where B is the batch size,
+                        N is the number of polygons to draw for each image,
+                        K is the number of nodes per polygon,
+                        2 represents the coordinates (x, y) of each point,
+
+        Returns:
+        torch.Tensor: A 5D tensor of shape (B, N, I, self.size, self.size) containing a distance map for each polygon of each image of each batch.
+                        where I is the number of isolines to extract for each image (I = isolines.shape[0])
+
+
+        Raises
+        ------
+        ValueError
+            If the values of the contour or not between 0 and 1.
+        """
+
+        b, n, k, _ = contour.shape
+        device = contour.device
+        contour = contour.reshape(b * n, k, -1)
+        mesh = self.mesh.unsqueeze(0).repeat(b * n, 1, 1, 1)
+        mesh = mesh.to(device)
+        self.vars = torch.tensor(self.vars, device=device, dtype=torch.float32).to(device)
+        self.isolines = self.isolines.to(device)
+        torch.pi = torch.acos(torch.zeros(1)).item() * 2
+
+        if (contour < 0).any() or (contour > 1).any():
+            raise ValueError("Tensor values should be in the range [0, 1]")
+
+        contour = torch.unsqueeze(contour, dim=1)
+        diff = -mesh + contour
+        min_diff = torch.min(torch.norm(diff, dim=-1), dim=2)[0]
+        min_diff = min_diff.reshape((b * n, self.size, self.size))
+        roll_diff = torch.roll(diff, -1, dims=2)
+        sign = diff * torch.roll(roll_diff, 1, dims=3)
+        sign = sign[:, :, :, 1] - sign[:, :, :, 0]
+        sign = torch.tanh(self.k * sign)
+        norm_diff = torch.clip(torch.norm(diff, dim=3), self.eps, None)
+        norm_roll = torch.clip(torch.norm(roll_diff, dim=3), self.eps, None)
+        scalar_product = torch.sum(diff * roll_diff, dim=3)
+        clip = torch.clip(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
+        angles = torch.arccos(clip)
+        mask = torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi))
+        mask = mask.reshape(b * n, self.size, self.size)
+        dmap = torch.unsqueeze((mask * min_diff) / torch.max(mask * min_diff), 0)
+        dmap = dmap.reshape(b, n, self.size, self.size)
+        mask = mask.reshape(b, n, self.size, self.size)
+        isolines = mask[:, :, None, ...] * torch.exp(
+            -((self.isolines[None, None, :, None, None] - dmap[:, :, None, ...]) ** (2))
+            / (self.vars[None, None, :, None, None])
+        )
+        return isolines
 
 
 class Sobel(nn.Module):

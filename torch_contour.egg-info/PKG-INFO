@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 1.1.7
+Version: 1.1.8
 Summary: Differentiable contour to image operations with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
@@ -190,7 +190,7 @@ This library also contains batch torch operations for performing:
 
 
  ```
-from torch_contour.torch_contour import area, perimeter, hausdorf_distance, curvature
+from torch_contour.torch_contour import area, perimeter, hausdorff_distance, curvature
 import torch
 
 
