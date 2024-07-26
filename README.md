@@ -27,6 +27,19 @@ $pip install torch_contour
   * Contour to isolines
   * Smooth contour
 
+if using  the layers above please cite the following paper:
+```
+@misc{habis2024deepcontourflowadvancingactive,
+      title={Deep ContourFlow: Advancing Active Contours with Deep Learning}, 
+      author={Antoine Habis and Vannary Meas-Yedid and Elsa Angelini and Jean-Christophe Olivo-Marin},
+      year={2024},
+      eprint={2407.10696},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2407.10696}, 
+}
+```
+
 2. Pytorch functions for contour feature extraction.
 
   * Area
