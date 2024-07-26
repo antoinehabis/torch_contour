@@ -756,7 +756,7 @@ class CleanContours:
             loops = self.find_loops(contour)
             loops_to_remove = [loop[0] for loop in loops if loop[1] < threshold_length]
             loops_to_remove = np.concatenate(loops_to_remove)
-            if not loops_to_remove:
+            if not np.any(loops_to_remove):
                 break
             mask = np.ones(len(contour), dtype=bool)
             mask[np.array(loops_to_remove).flatten()] = False

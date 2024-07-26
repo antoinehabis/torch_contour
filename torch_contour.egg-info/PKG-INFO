@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 1.1.9
+Version: 1.2.0
 Summary: Differentiable contour to image operations with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
@@ -47,6 +47,7 @@ $pip install torch_contour
   * Contour to mask 
   * Contour to distance map
   * Draw contour
+  * Contour to isolines
   * Smooth contour
 
 2. Pytorch functions for contour feature extraction.
