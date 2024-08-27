@@ -503,10 +503,9 @@ class Smoothing(nn.Module):
 
         out = torch.cat([bot, contours, top], dim=1)
         out_moved_axis = torch.moveaxis(out, -1, 1)
-
         smoothed_tensor = F.conv1d(out_moved_axis, self.kernel, padding="same", groups=2)
-        return smoothed_tensor[:, :, margin:-margin].reshape(b, n, k, 2)
-
+        smoothed_tensor = torch.moveaxis(smoothed_tensor, -1, 1)
+        return smoothed_tensor[:, margin:-margin, :].reshape(b, n, k, 2)
 
 def area(contours):
     """Return the area of each polygon of each batch
@@ -647,6 +646,7 @@ def curvature(contour):
     return curvature
 
 
+
 class CleanContours:
     def __init__(self):
         """
@@ -734,7 +734,9 @@ class CleanContours:
                     continue
                 if self.is_intersecting(p1[i], p2[i], p1[j], p2[j]):
                     loop = (
-                        np.concatenate((contour[i : j + 1], contour[: i + 1]), axis=0) if i > j else contour[i : j + 1]
+                        np.concatenate((contour[i : j + 1], contour[: i + 1]), axis=0)
+                        if i > j
+                        else contour[i : j + 1]
                     )
                     loop_length = self.contour_length(loop)
                     loops.append((np.arange(i, j + 1) % n, loop_length))
@@ -755,11 +757,11 @@ class CleanContours:
         while True:
             loops = self.find_loops(contour)
             loops_to_remove = [loop[0] for loop in loops if loop[1] < threshold_length]
-            loops_to_remove = np.concatenate(loops_to_remove)
-            if not np.any(loops_to_remove):
+            if not loops_to_remove:
                 break
+            array_to_remove = np.unique(np.concatenate(loops_to_remove).flatten())
             mask = np.ones(len(contour), dtype=bool)
-            mask[np.array(loops_to_remove).flatten()] = False
+            mask[array_to_remove] = False
             contour = contour[mask]
             if not np.array_equal(contour[0], contour[-1]):
                 contour = np.append(contour, [contour[0]], axis=0)
@@ -786,7 +788,7 @@ class CleanContours:
 
         return cleaned_contours
 
-    def make_strictly_increasing(self, sequence, epsilon=1e-5):
+    def make_strictly_increasing(self, sequence, epsilon=1e-3):
         """
         Modify a sequence to ensure it is strictly increasing by adjusting values up to a small epsilon.
 
@@ -812,7 +814,9 @@ class CleanContours:
         bot = contour[-margin:-1]
 
         contour_init_new = np.concatenate([bot, contour, top])
-        distance = np.cumsum(np.sqrt(np.sum(np.diff(contour_init_new, axis=0) ** 2, axis=1)))
+        distance = np.cumsum(
+            np.sqrt(np.sum(np.diff(contour_init_new, axis=0) ** 2, axis=1))
+        )
         distance = np.insert(distance, 0, 0) / distance[-1]
         distance = self.make_strictly_increasing(distance)
         indices = np.linspace(0, contour_init_new.shape[0] - 1, 100).astype(int)
