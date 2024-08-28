@@ -4,6 +4,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 import torch.nn.functional as F
 from torch import cdist
+from numba import njit
 
 
 class Contour_to_mask(nn.Module):
@@ -139,7 +140,7 @@ class Contour_to_distance_map(nn.Module):
             / self.size
         )
 
-    def forward(self, contour):
+    def forward(self, contour, return_mask=False):
         """Return the distance map on an image of the given size
 
         ...
@@ -190,7 +191,10 @@ class Contour_to_distance_map(nn.Module):
         resize = sum_angles.reshape(b * n, self.size, self.size)
         dmap = torch.unsqueeze((resize * min_diff) / torch.max(resize * min_diff), 0)
         dmap = dmap.reshape(b, n, self.size, self.size)
-        return dmap
+        if return_mask:
+            return dmap, resize.reshape(b, n, self.size, self.size)
+        else:
+            return dmap
 
 
 class Contour_to_isolines(nn.Module):
@@ -507,6 +511,7 @@ class Smoothing(nn.Module):
         smoothed_tensor = torch.moveaxis(smoothed_tensor, -1, 1)
         return smoothed_tensor[:, margin:-margin, :].reshape(b, n, k, 2)
 
+
 def area(contours):
     """Return the area of each polygon of each batch
 
@@ -646,7 +651,6 @@ def curvature(contour):
     return curvature
 
 
-
 class CleanContours:
     def __init__(self):
         """
@@ -659,7 +663,9 @@ class CleanContours:
         """
         pass
 
-    def contour_length(self, contour):
+    @staticmethod
+    @njit
+    def contour_length(contour):
         """
         Calculate the perimeter (total length) of a single polygon contour.
 
@@ -673,7 +679,9 @@ class CleanContours:
         lengths = np.sqrt((diff**2).sum(axis=1))
         return np.sum(lengths)
 
-    def cross_product(self, a, b):
+    @staticmethod
+    @njit
+    def cross_product(a, b):
         """
         Compute the cross product of two 2D vectors.
 
@@ -686,7 +694,9 @@ class CleanContours:
         """
         return a[0] * b[1] - a[1] * b[0]
 
-    def is_intersecting(self, p1, p2, p3, p4):
+    @staticmethod
+    @njit
+    def is_intersecting(p1, p2, p3, p4):
         """
         Check if line segment p1p2 intersects with line segment p3p4.
 
@@ -702,13 +712,15 @@ class CleanContours:
         d1 = p2 - p1
         d2 = p4 - p3
         dp = p3 - p1
-        cp1 = self.cross_product(d1, dp)
-        cp2 = self.cross_product(d1, p4 - p1)
-        cp3 = self.cross_product(d2, -dp)
-        cp4 = self.cross_product(d2, p2 - p3)
+        cp1 = CleanContours.cross_product(d1, dp)
+        cp2 = CleanContours.cross_product(d1, p4 - p1)
+        cp3 = CleanContours.cross_product(d2, -dp)
+        cp4 = CleanContours.cross_product(d2, p2 - p3)
         return (np.sign(cp1) != np.sign(cp2)) & (np.sign(cp3) != np.sign(cp4))
 
-    def find_loops(self, contour):
+    @staticmethod
+    @njit
+    def find_loops(contour):
         """
         Find loops in a single polygon and return their start and end indices along with the loop length.
 
@@ -723,27 +735,26 @@ class CleanContours:
         n = len(contour)
         loops = []
 
-        # Create all combinations of segment pairs
         segments = np.arange(n)
         p1 = contour[segments]
         p2 = contour[(segments + 1) % n]
 
         for i in range(n):
             for j in range(i + 2, n):
-                if j == (i + 1) % n:  # Skip adjacent edges
+                if j == (i + 1) % n:
                     continue
-                if self.is_intersecting(p1[i], p2[i], p1[j], p2[j]):
+                if CleanContours.is_intersecting(p1[i], p2[i], p1[j], p2[j]):
                     loop = (
-                        np.concatenate((contour[i : j + 1], contour[: i + 1]), axis=0)
-                        if i > j
-                        else contour[i : j + 1]
+                        np.concatenate((contour[i : j + 1], contour[: i + 1]), axis=0) if i > j else contour[i : j + 1]
                     )
-                    loop_length = self.contour_length(loop)
+                    loop_length = CleanContours.contour_length(loop)
                     loops.append((np.arange(i, j + 1) % n, loop_length))
 
         return loops
 
-    def remove_small_loops(self, contour, threshold_length):
+    @staticmethod
+    @njit
+    def remove_small_loops(contour, threshold_length):
         """
         Remove loops smaller than the threshold length from a single polygon.
 
@@ -755,7 +766,7 @@ class CleanContours:
         - ndarray: Cleaned contour after removing small loops.
         """
         while True:
-            loops = self.find_loops(contour)
+            loops = CleanContours.find_loops(contour)
             loops_to_remove = [loop[0] for loop in loops if loop[1] < threshold_length]
             if not loops_to_remove:
                 break
@@ -781,14 +792,16 @@ class CleanContours:
         contours = contours.reshape(b * n, k, 2)
         cleaned_contours = []
         for contour in contours:
-            original_length = self.contour_length(contour)
+            original_length = CleanContours.contour_length(contour)
             threshold_length = original_length / 2
-            cleaned_contour = self.remove_small_loops(contour, threshold_length)
+            cleaned_contour = CleanContours.remove_small_loops(contour, threshold_length)
             cleaned_contours.append(cleaned_contour)
 
         return cleaned_contours
 
-    def make_strictly_increasing(self, sequence, epsilon=1e-3):
+    @staticmethod
+    @njit
+    def make_strictly_increasing(sequence, epsilon=1e-3):
         """
         Modify a sequence to ensure it is strictly increasing by adjusting values up to a small epsilon.
 
@@ -808,15 +821,15 @@ class CleanContours:
 
     def interpolate(self, contour, n):
 
+        from scipy.interpolate import CubicSpline  # This import is left here because SciPy is not supported by Numba
+
         margin = n // 10
 
         top = contour[:margin]
         bot = contour[-margin:-1]
 
         contour_init_new = np.concatenate([bot, contour, top])
-        distance = np.cumsum(
-            np.sqrt(np.sum(np.diff(contour_init_new, axis=0) ** 2, axis=1))
-        )
+        distance = np.cumsum(np.sqrt(np.sum(np.diff(contour_init_new, axis=0) ** 2, axis=1)))
         distance = np.insert(distance, 0, 0) / distance[-1]
         distance = self.make_strictly_increasing(distance)
         indices = np.linspace(0, contour_init_new.shape[0] - 1, 100).astype(int)

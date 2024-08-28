@@ -108,7 +108,7 @@ The polygon must have values between 0 and 1.
 ## Example:
 
  ```
-from torch_contour.torch_contour import Contour_to_distance_map,Contour_to_isolines, Contour_to_mask, Draw_contour, Smoothing
+from torch_contour.torch_contour import Contour_to_distance_map,Contour_to_isolines, Contour_to_mask, Draw_contour, Smoothing, CleanContours
 import torch
 import matplotlib.pyplot as plt
 
@@ -178,12 +178,13 @@ Mask = Contour_to_mask(width)
 Draw = Draw_contour(width)
 Dmap = Contour_to_distance_map(width)
 Iso = Contour_to_isolines(width, isolines=[0.1, 0.5, 1])
-Smoother = Smoothing(sigma=1)
+smoother = Smoothing(sigma=1)
 
 mask = Mask(polygons1).cpu().detach().numpy()[0, 0]
 draw = Draw(polygons1).cpu().detach().numpy()[0, 0]
 distance_map = Dmap(polygons1).cpu().detach().numpy()[0, 0]
 isolines = Iso(polygons1).cpu().detach().numpy()[0, 0]
+contour_smooth = smoother(polygons1)
 
 plt.imshow(mask)
 plt.show()
