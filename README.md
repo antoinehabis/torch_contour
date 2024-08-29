@@ -1,5 +1,13 @@
 # torch_contour
 
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+[![Mail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:antoine.habis.tlcm@gmail.com)
+[![Downloads](https://static.pepy.tech/badge/torch_contour/month)](https://pepy.tech/project/torch_contour)
+[![Downloads](https://static.pepy.tech/badge/torch_contour)](https://pepy.tech/project/torch_contour)
+[![ArXiv Paper](https://img.shields.io/badge/DOI-10.1038%2Fs41586--020--2649--2-blue)](
+https://doi.org/10.48550/arXiv.2407.10696)
+
+
 <figure>
 <p align="center">
   <img 

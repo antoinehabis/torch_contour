@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: torch_contour
-Version: 1.2.3
+Version: 1.2.4
 Summary: Differentiable contour to image operations with PyTorch
 Home-page: https://github.com/antoinehabis/torch_contour
 Author: Antoine Habis
