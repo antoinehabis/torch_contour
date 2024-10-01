@@ -4,6 +4,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 import torch.nn.functional as F
 from torch import cdist
+from numba import jit
 
 
 
@@ -84,7 +85,7 @@ class Contour_to_mask(nn.Module):
         norm_roll = torch.linalg.vector_norm(roll_diff, dim=3)
         scalar_product = torch.sum(diff * roll_diff, dim=3)
 
-        clip = torch.clamp(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
+        clip = torch.clamp(scalar_product / (norm_diff * norm_roll + self.eps), -1 + self.eps, 1 - self.eps)
         angles = torch.acos(clip)
         sum_angles = torch.clamp(torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi)), 0, 1)
         out0 = sum_angles.reshape(b * n, self.size, self.size)
@@ -185,7 +186,7 @@ class Contour_to_distance_map(nn.Module):
         norm_diff = torch.clip(torch.norm(diff, dim=3), self.eps, None)
         norm_roll = torch.clip(torch.norm(roll_diff, dim=3), self.eps, None)
         scalar_product = torch.sum(diff * roll_diff, dim=3)
-        clip = torch.clip(scalar_product / (norm_diff * norm_roll), -1 + self.eps, 1 - self.eps)
+        clip = torch.clip(scalar_product / (norm_diff * norm_roll+ self.eps), -1 + self.eps, 1 - self.eps)
         angles = torch.arccos(clip)
         sum_angles = torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi))
         resize = sum_angles.reshape(b * n, self.size, self.size)
@@ -651,186 +652,192 @@ def curvature(contour):
     return curvature
 
 
+
+# Helper function: cross product of two 2D vectors
+@jit(nopython=True)
+def cross_product_numba(a, b):
+    return a[0] * b[1] - a[1] * b[0]
+
+
+# Helper function: check if two line segments intersect
+@jit(nopython=True)
+def is_intersecting_numba(p1, p2, p3, p4):
+    d1 = p2 - p1
+    d2 = p4 - p3
+    dp = p3 - p1
+    cp1 = cross_product_numba(d1, dp)
+    cp2 = cross_product_numba(d1, p4 - p1)
+    cp3 = cross_product_numba(d2, -dp)
+    cp4 = cross_product_numba(d2, p2 - p3)
+    return (np.sign(cp1) != np.sign(cp2)) & (np.sign(cp3) != np.sign(cp4))
+
+
+# Helper function: calculate the length of a contour
+@jit(nopython=True)
+def contour_length_numba(contour):
+    total_length = 0.0
+    num_points = contour.shape[0]
+    
+    # Iterate over each point and calculate the distance to the next
+    for i in range(num_points):
+        # Get the current point and the next point (wrapping around to the first point at the end)
+        current_point = contour[i]
+        next_point = contour[(i + 1) % num_points]
+        
+        # Calculate the Euclidean distance between the two points
+        diff = current_point - next_point
+        segment_length = np.sqrt(np.sum(diff ** 2))
+        
+        # Accumulate the length
+        total_length += segment_length
+    
+    return total_length
+
+
+# Helper function: erase the first encountered loop
+@jit(nopython=True)
+def erase_first_encounter_loop_numba(contour, threshold_length):
+    num_points = contour.shape[0]
+
+    for start_idx in range(num_points - 2):
+        for end_idx in range(start_idx + 2, num_points - 1):
+            if is_intersecting_numba(
+                contour[start_idx], contour[start_idx + 1], contour[end_idx], contour[end_idx + 1]
+            ):
+                # Extract the loop
+                loop = contour[start_idx : (end_idx + 1)]
+                loop_len = contour_length_numba(loop)
+
+                if loop_len < threshold_length / 3 or len(loop) < 2:
+                    contour = np.concatenate((contour[:start_idx], contour[end_idx:]))
+                    return contour  # Small loop removed
+
+                elif loop_len >= threshold_length / 2:
+                    return contour[start_idx : (end_idx + 1)]  # Large loop returned
+
+    return contour
+
+@jit(nopython=True)
+def make_strictly_increasing_numba(sequence, epsilon=1e-3):
+
+    modified_sequence = sequence.copy()  # Copy the input sequence
+
+    for i in range(1, len(modified_sequence)):
+        if modified_sequence[i] <= modified_sequence[i - 1]:
+            modified_sequence[i] = modified_sequence[i - 1] + epsilon
+
+    return modified_sequence
+
+
 class CleanContours:
     def __init__(self):
         """
-
-        Initialize the CleanContours class.
-        This class can remove loops inside a batch of several contours.
-
-        The methods are only available for numpy arrays and not torch tensors.
-        To clean the contours it is necessary to first apply .cpu().detach().numpy() to turn torch tensor into a numpy array.
+        Initialize the CleanContours class to process and clean polygons (contours).
+        This class provides methods to remove loops inside a batch of contours.
         """
         pass
 
-
     def contour_length(self, contour):
         """
-        Calculate the perimeter (total length) of a single polygon contour.
+        Wrapper around Numba-optimized contour length computation.
 
         Parameters:
-        - contour (ndarray): An array of shape (N, 2) representing the vertices of the polygon.
+        - contour (ndarray): Array of shape (N, 2) representing the polygon.
 
         Returns:
-        - float: Perimeter of the polygon.
+        - float: The total length of the contour.
         """
-        diff = np.diff(contour, axis=0, append=[contour[0]])
-        lengths = np.sqrt((diff**2).sum(axis=1))
-        return np.sum(lengths)
-
-
-    def cross_product(self, a, b):
-        """
-        Compute the cross product of two 2D vectors.
-
-        Parameters:
-        - a (ndarray): First vector of shape (2,).
-        - b (ndarray): Second vector of shape (2,).
-
-        Returns:
-        - float: Cross product of vectors a and b.
-        """
-        return a[0] * b[1] - a[1] * b[0]
-
+        return contour_length_numba(contour)
 
     def is_intersecting(self, p1, p2, p3, p4):
         """
-        Check if line segment p1p2 intersects with line segment p3p4.
+        Wrapper around Numba-optimized intersection checking.
 
         Parameters:
-        - p1 (ndarray): Start point of segment p1p2, shape (2,).
-        - p2 (ndarray): End point of segment p1p2, shape (2,).
-        - p3 (ndarray): Start point of segment p3p4, shape (2,).
-        - p4 (ndarray): End point of segment p3p4, shape (2,).
+        - p1, p2: Endpoints of the first line segment.
+        - p3, p4: Endpoints of the second line segment.
 
         Returns:
-        - bool: True if segments intersect, False otherwise.
+        - bool: True if the segments intersect, False otherwise.
         """
-        d1 = p2 - p1
-        d2 = p4 - p3
-        dp = p3 - p1
-        cp1 = self.cross_product(d1, dp)
-        cp2 = self.cross_product(d1, p4 - p1)
-        cp3 = self.cross_product(d2, -dp)
-        cp4 = self.cross_product(d2, p2 - p3)
-        return (np.sign(cp1) != np.sign(cp2)) & (np.sign(cp3) != np.sign(cp4))
+        return is_intersecting_numba(p1, p2, p3, p4)
 
-
-    def find_loops(self, contour):
+    def erase_first_encounter_loop(self, contour, threshold_length):
         """
-        Find loops in a single polygon and return their start and end indices along with the loop length.
+        Finds and removes or returns loops in a polygon based on a given threshold length.
 
         Parameters:
-        - contour (ndarray): An array of shape (N, 2) representing the vertices of the polygon.
+        - contour (ndarray): Array of shape (N, 2) representing the vertices of the polygon.
+        - threshold_length (float): Threshold length to categorize loops as small or large.
 
         Returns:
-        - list: List of tuples, each tuple containing:
-            - ndarray: Indices of the contour forming the loop.
-            - float: Length of the loop.
+        - ndarray: Modified contour after erasing the first loop encountered that fits the criteria.
         """
-        n = len(contour)
-        loops = []
+        return erase_first_encounter_loop_numba(contour, threshold_length)
 
-        segments = np.arange(n)
-        p1 = contour[segments]
-        p2 = contour[(segments + 1) % n]
-
-        for i in range(n):
-            for j in range(i + 2, n):
-                if j == (i + 1) % n:
-                    continue
-                if self.is_intersecting(p1[i], p2[i], p1[j], p2[j]):
-                    loop = (
-                        np.concatenate((contour[i : j + 1], contour[: i + 1]), axis=0) if i > j else contour[i : j + 1]
-                    )
-                    loop_length = self.contour_length(loop)
-                    loops.append((np.arange(i, j + 1) % n, loop_length))
-
-        return loops
-
-
-    def remove_small_loops(self, contour, threshold_length):
+    def remove_small_loops(self, contour, length):
         """
         Remove loops smaller than the threshold length from a single polygon.
 
         Parameters:
         - contour (ndarray): An array of shape (N, 2) representing the vertices of the polygon.
-        - threshold_length (float): Threshold length below which loops should be removed.
+        - length (float): Threshold length below which loops should be removed.
 
         Returns:
         - ndarray: Cleaned contour after removing small loops.
         """
-        while True:
-            loops = self.find_loops(contour)
-            loops_to_remove = [loop[0] for loop in loops if loop[1] < threshold_length]
-            if not loops_to_remove:
-                break
-            array_to_remove = np.unique(np.concatenate(loops_to_remove).flatten())
-            mask = np.ones(len(contour), dtype=bool)
-            mask[array_to_remove] = False
-            contour = contour[mask]
-            if not np.array_equal(contour[0], contour[-1]):
-                contour = np.append(contour, [contour[0]], axis=0)
-        return contour
+        contour_without_loops = self.erase_first_encounter_loop(contour, length)
+        while contour.shape[0] != contour_without_loops.shape[0]:
+            contour = contour_without_loops
+            contour_without_loops = self.erase_first_encounter_loop(contour, length)
+        return contour_without_loops
 
     def clean_contours(self, contours):
         """
         Clean multiple polygons, removing small loops within each polygon.
 
         Parameters:
-        - contours (ndarray): array of shape (B,N,K,2) where B is the batch size, N is the number of polygon per batch and  K is the number of vertices per polygon
+        - contours (ndarray): Array of shape (B, N, K, 2) where B is the batch size, N is the number of polygons per batch, and K is the number of vertices per polygon.
 
         Returns:
-        - list of ndarrays: List of cleaned contours with B*N elements, where each contour i is an array of shape (M_i, 2).
+        - list of ndarrays: List of cleaned contours.
         """
         b, n, k, _ = contours.shape
         contours = contours.reshape(b * n, k, 2)
         cleaned_contours = []
         for contour in contours:
-            original_length = self.contour_length(contour)
-            threshold_length = original_length / 2
-            cleaned_contour = self.remove_small_loops(contour, threshold_length)
-            cleaned_contours.append(cleaned_contour)
-
+            length = self.contour_length(contour)
+            contour = self.remove_small_loops(contour, length)
+            cleaned_contours.append(contour)
         return cleaned_contours
-
-
-    def make_strictly_increasing(self, sequence, epsilon=1e-3):
+    
+    def make_strictly_increasing(self, x):
         """
         Modify a sequence to ensure it is strictly increasing by adjusting values up to a small epsilon.
 
         Parameters:
-        - sequence (list): List of numbers representing the sequence to be modified.
-        - epsilon (float): Threshold value to consider two numbers as 'equal'. Default is 1e-10.
+        - sequence (ndarray): NumPy array of numbers representing the sequence to be modified.
+        - epsilon (float): Threshold value to consider two numbers as 'equal'. Default is 1e-3.
 
         Returns:
-        - list: Modified sequence where all values are strictly increasing.
+        - ndarray: Modified sequence where all values are strictly increasing.
         """
-        modified_sequence = sequence[:]
-
-        for i in range(1, len(modified_sequence)):
-            if modified_sequence[i] == modified_sequence[i - 1]:
-                modified_sequence[i] = modified_sequence[i - 1] + epsilon
-        return modified_sequence
-
+        return make_strictly_increasing_numba(x)
+    
     def interpolate(self, contour, n):
 
-
-        margin = n // 10
-
+        margin = contour.shape[0] // 2
         top = contour[:margin]
         bot = contour[-margin:-1]
-
-        contour_init_new = np.concatenate([bot, contour, top])
-        distance = np.cumsum(np.sqrt(np.sum(np.diff(contour_init_new, axis=0) ** 2, axis=1)))
-        distance = np.insert(distance, 0, 0) / distance[-1]
+        contour_concat = np.concatenate([bot, contour, top])
+        distance = np.cumsum(np.sqrt(np.sum(np.diff(contour_concat, axis=0) ** 2, axis=1)))
+        distance = np.insert(distance, 0, 0)
         distance = self.make_strictly_increasing(distance)
-        indices = np.linspace(0, contour_init_new.shape[0] - 1, 100).astype(int)
-        indices = np.unique(indices)
-        Cub = CubicSpline(distance[indices], contour_init_new[indices])
+        Cub = CubicSpline(distance, contour_concat)
         interp_contour = Cub(np.linspace(distance[margin], distance[-margin], n))
 
         return interp_contour
+
 
     def clean_contours_and_interpolate(self, contours):
         """
@@ -848,9 +855,8 @@ class CleanContours:
         contours = contours.reshape(b * n, k, 2)
         cleaned_contours = np.zeros((b * n, k, 2))
         for i, contour in enumerate(contours):
-            original_length = self.contour_length(contour)
-            threshold_length = original_length / 2
-            cleaned_contour = self.remove_small_loops(contour, threshold_length)
-            interpolated_contour = self.interpolate(cleaned_contour, k)
+            length = self.contour_length(contour)
+            contour = self.remove_small_loops(contour, length)
+            interpolated_contour = self.interpolate(contour, k)
             cleaned_contours[i] = interpolated_contour
         return cleaned_contours.reshape(b, n, k, 2)
