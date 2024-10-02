@@ -532,9 +532,10 @@ def area(contours):
     """
     b, n, k, _ = contours.shape
     contours = contours.reshape((b * n, k, -1))
-    y = torch.roll(contours[:, :, 1], shifts=-1, dims=1)
-    z = torch.roll(contours[:, :, 0], shifts=-1, dims=1)
-    return (torch.abs(torch.sum(contours[:, :, 1] * y - contours[:, :, 0] * z, dim=-1)) / 2.0).reshape((b, n))
+    y = torch.roll(contours[:, :, 1], shifts=1, dims=1)
+    z = torch.roll(contours[:, :, 0], shifts=1, dims=1)
+    return (torch.abs(torch.sum(contours[:, :, 0] * y - contours[:, :, 1] * z, dim=-1)) / 2.0).reshape((b, n))
+
 
 
 def perimeter(contours):
