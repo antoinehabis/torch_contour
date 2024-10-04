@@ -7,7 +7,6 @@ from torch import cdist
 from numba import jit
 
 
-
 class Contour_to_mask(nn.Module):
     """This layer transform a polygon into a mask
 
@@ -47,7 +46,7 @@ class Contour_to_mask(nn.Module):
         self.mesh = (
             torch.unsqueeze(
                 torch.stack(
-                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
+                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size), indexing="ij"),
                     dim=-1,
                 ).reshape(-1, 2),
                 dim=1,
@@ -133,7 +132,7 @@ class Contour_to_distance_map(nn.Module):
         self.mesh = (
             torch.unsqueeze(
                 torch.stack(
-                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
+                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size), indexing="ij"),
                     dim=-1,
                 ).reshape(-1, 2),
                 dim=1,
@@ -155,6 +154,7 @@ class Contour_to_distance_map(nn.Module):
                         2 represents the coordinates (x, y) of each point,
 
         Returns:
+        --------
         torch.Tensor: A 4D tensor of shape (B, N, self.size, self.size) containing a distance map for each polygon of each image of each batch.
 
 
@@ -186,7 +186,7 @@ class Contour_to_distance_map(nn.Module):
         norm_diff = torch.clip(torch.norm(diff, dim=3), self.eps, None)
         norm_roll = torch.clip(torch.norm(roll_diff, dim=3), self.eps, None)
         scalar_product = torch.sum(diff * roll_diff, dim=3)
-        clip = torch.clip(scalar_product / (norm_diff * norm_roll+ self.eps), -1 + self.eps, 1 - self.eps)
+        clip = torch.clip(scalar_product / (norm_diff * norm_roll + self.eps), -1 + self.eps, 1 - self.eps)
         angles = torch.arccos(clip)
         sum_angles = torch.abs(torch.sum(sign * angles, dim=2) / (2 * torch.pi))
         resize = sum_angles.reshape(b * n, self.size, self.size)
@@ -245,7 +245,7 @@ class Contour_to_isolines(nn.Module):
         self.mesh = (
             torch.unsqueeze(
                 torch.stack(
-                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size)),
+                    torch.meshgrid(torch.arange(self.size), torch.arange(self.size), indexing="ij"),
                     dim=-1,
                 ).reshape(-1, 2),
                 dim=1,
@@ -483,7 +483,7 @@ class Smoothing(nn.Module):
             torch.Tensor: The Gaussian kernel tensor.
         """
         mil = self.sigma * 2 * 5 * 1 // 2  # The filter extends to 5 sigma
-        filter = np.arange(self.sigma * 2 * 5) - mil
+        filter = np.arange(self.sigma * 2 * 5 + 1) - mil
         x = np.exp((-1 / 2) * (filter**2) / (2 * (self.sigma) ** 2))
         tmp = torch.tensor(x / np.sum(x), dtype=torch.float32)[None, None]
         return torch.cat([tmp, tmp])
@@ -535,7 +535,6 @@ def area(contours):
     y = torch.roll(contours[:, :, 1], shifts=1, dims=1)
     z = torch.roll(contours[:, :, 0], shifts=1, dims=1)
     return (torch.abs(torch.sum(contours[:, :, 0] * y - contours[:, :, 1] * z, dim=-1)) / 2.0).reshape((b, n))
-
 
 
 def perimeter(contours):
@@ -653,7 +652,6 @@ def curvature(contour):
     return curvature
 
 
-
 # Helper function: cross product of two 2D vectors
 @jit(nopython=True)
 def cross_product_numba(a, b):
@@ -678,20 +676,20 @@ def is_intersecting_numba(p1, p2, p3, p4):
 def contour_length_numba(contour):
     total_length = 0.0
     num_points = contour.shape[0]
-    
+
     # Iterate over each point and calculate the distance to the next
     for i in range(num_points):
         # Get the current point and the next point (wrapping around to the first point at the end)
         current_point = contour[i]
         next_point = contour[(i + 1) % num_points]
-        
+
         # Calculate the Euclidean distance between the two points
         diff = current_point - next_point
-        segment_length = np.sqrt(np.sum(diff ** 2))
-        
+        segment_length = np.sqrt(np.sum(diff**2))
+
         # Accumulate the length
         total_length += segment_length
-    
+
     return total_length
 
 
@@ -717,6 +715,7 @@ def erase_first_encounter_loop_numba(contour, threshold_length):
                     return contour[start_idx : (end_idx + 1)]  # Large loop returned
 
     return contour
+
 
 @jit(nopython=True)
 def make_strictly_increasing_numba(sequence, epsilon=1e-3):
@@ -811,7 +810,7 @@ class CleanContours:
             contour = self.remove_small_loops(contour, length)
             cleaned_contours.append(contour)
         return cleaned_contours
-    
+
     def make_strictly_increasing(self, x):
         """
         Modify a sequence to ensure it is strictly increasing by adjusting values up to a small epsilon.
@@ -824,7 +823,7 @@ class CleanContours:
         - ndarray: Modified sequence where all values are strictly increasing.
         """
         return make_strictly_increasing_numba(x)
-    
+
     def interpolate(self, contour, n):
 
         margin = contour.shape[0] // 2
@@ -838,7 +837,6 @@ class CleanContours:
         interp_contour = Cub(np.linspace(distance[margin], distance[-margin], n))
 
         return interp_contour
-
 
     def clean_contours_and_interpolate(self, contours):
         """
