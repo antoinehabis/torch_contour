@@ -1,2 +1,10 @@
 
 test.ipynb
+__pycache__/
+*.py[cod]
+*.nbc
+*.nbi
+*.egg-info/
+dist/
+build/
+.pytest_cache/
