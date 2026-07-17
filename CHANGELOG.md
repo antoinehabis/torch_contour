@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.4.3] — 2026-07-17
+
+### Performance
+
+- `erase_first_loop_sweep_numba` now applies a **2D AABB filter** (x-axis sweep-line break + y-axis overlap rejection) instead of only the x-axis filter. The y-axis check eliminates most candidate pairs that survive the x-filter for typical contours, reducing cross-product calls by another 6–8×.
+
+  Combined speedup over the original O(K²) AABB scan:
+
+  | K | Before (1.4.0 AABB) | After (1.4.3 sweep+2D) | Speedup |
+  |---|---|---|---|
+  | 100 | 30 µs | 1.8 µs | 17× |
+  | 200 | 123 µs | 3.3 µs | 37× |
+  | 500 | 772 µs | 9.2 µs | 84× |
+  | 1000 | 3.1 ms | 19.5 µs | 159× |
+  | 2000 | 12.5 ms | 43.6 µs | 286× |
+
+---
+
 ## [1.4.2] — 2026-07-17
 
 ### Performance
