@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.5] — 2026-07-17
+
+### New features
+
+- **`compile` parameter** on all `_ContourBase` subclasses (`ContourToMask`, `ContourToDistanceMap`, `ContourToSDF`, `ContourToIsolines`) and `DrawContour`. Pass `compile=True` to JIT-compile `forward` via `torch.compile` on the first call, fusing elementwise operations for faster repeated inference (especially on GPU/Linux).
+
+  ```python
+  ctm = ContourToMask(size=128, compile=True)
+  ```
+
+---
+
 ## [1.4.4] — 2026-07-17
 
 ### Performance

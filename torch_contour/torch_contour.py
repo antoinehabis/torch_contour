@@ -43,9 +43,12 @@ class _ContourBase(nn.Module):
         Sharpness of the soft-sign approximation (default 1e5).
     eps : float
         Numerical stability term (default 1e-5).
+    compile : bool
+        If True, JIT-compile ``forward`` with ``torch.compile`` on the first
+        call for faster subsequent execution (default False).
     """
 
-    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5) -> None:
+    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5, compile: bool = False) -> None:
         super().__init__()
         self.k = k
         self.eps = eps
@@ -65,6 +68,8 @@ class _ContourBase(nn.Module):
             / self.size
         )
         self.register_buffer("mesh", mesh)
+        if compile:
+            self.forward = torch.compile(self.forward)
 
     def _compute(
         self, contour: torch.Tensor
@@ -132,10 +137,12 @@ class ContourToMask(_ContourBase):
         Sharpness of the sign approximation (default 1e5).
     eps : float
         Numerical stability term (default 1e-5).
+    compile : bool
+        JIT-compile ``forward`` with ``torch.compile`` (default False).
     """
 
-    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5) -> None:
-        super().__init__(size=size, k=k, eps=eps)
+    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5, compile: bool = False) -> None:
+        super().__init__(size=size, k=k, eps=eps, compile=compile)
 
     def forward(self, contour: torch.Tensor) -> torch.Tensor:
         """
@@ -164,10 +171,12 @@ class ContourToDistanceMap(_ContourBase):
         Sharpness of the sign approximation (default 1e5).
     eps : float
         Numerical stability term (default 1e-5).
+    compile : bool
+        JIT-compile ``forward`` with ``torch.compile`` (default False).
     """
 
-    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5) -> None:
-        super().__init__(size=size, k=k, eps=eps)
+    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5, compile: bool = False) -> None:
+        super().__init__(size=size, k=k, eps=eps, compile=compile)
 
     def forward(
         self, contour: torch.Tensor, return_mask: bool = False
@@ -208,6 +217,8 @@ class ContourToIsolines(_ContourBase):
         Sharpness of the sign approximation (default 1e5).
     eps : float
         Numerical stability term (default 1e-5).
+    compile : bool
+        JIT-compile ``forward`` with ``torch.compile`` (default False).
     """
 
     def __init__(
@@ -216,13 +227,13 @@ class ContourToIsolines(_ContourBase):
         isolines: list[float],
         k: float = 1e5,
         eps: float = 1e-5,
+        compile: bool = False,
     ) -> None:
-        super().__init__(size=size, k=k, eps=eps)
+        super().__init__(size=size, k=k, eps=eps, compile=compile)
 
         if any(element < 0 or element > 1 for element in isolines):
             raise ValueError("all isolines must be in the range [0, 1].")
 
-        # Register in order: mesh (done by super), isolines, then vars (depends on isolines)
         self.register_buffer("isolines", torch.tensor(isolines, dtype=torch.float32))
         self.register_buffer("vars", self.mean_to_var(self.isolines))
 
@@ -282,10 +293,12 @@ class ContourToSDF(_ContourBase):
         Sharpness of the sign approximation (default 1e5).
     eps : float
         Numerical stability term (default 1e-5).
+    compile : bool
+        JIT-compile ``forward`` with ``torch.compile`` (default False).
     """
 
-    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5) -> None:
-        super().__init__(size=size, k=k, eps=eps)
+    def __init__(self, size: int, k: float = 1e5, eps: float = 1e-5, compile: bool = False) -> None:
+        super().__init__(size=size, k=k, eps=eps, compile=compile)
 
     def forward(self, contour: torch.Tensor) -> torch.Tensor:
         """
@@ -300,7 +313,6 @@ class ContourToSDF(_ContourBase):
             Shape (B, N, size, size) — SDF: positive inside, negative outside.
         """
         mask, min_diff, b, n = self._compute(contour)
-        # (2·mask − 1): +1 deep inside, −1 deep outside, 0 on the boundary
         sdf = (2.0 * mask - 1.0) * min_diff
         return sdf.reshape(b, n, self.size, self.size)
 
@@ -319,7 +331,6 @@ class Sobel(nn.Module):
     def forward(self, img: torch.Tensor) -> torch.Tensor:
         x = self.filter(img)
         x = torch.sqrt(torch.sum(torch.mul(x, x), dim=1, keepdim=True))
-        # Zero the border without in-place ops (in-place would break autograd)
         return F.pad(x[:, :, 1:-1, 1:-1], (1, 1, 1, 1), value=0.0)
 
 
@@ -336,9 +347,11 @@ class DrawContour(nn.Module):
         Line thickness in pixels (default 1).
     k : float
         Sharpness of the sign approximation forwarded to ContourToMask (default 1e5).
+    compile : bool
+        JIT-compile the internal ``ContourToMask`` with ``torch.compile`` (default False).
     """
 
-    def __init__(self, size: int, thickness: int = 1, k: float = 1e5) -> None:
+    def __init__(self, size: int, thickness: int = 1, k: float = 1e5, compile: bool = False) -> None:
         super().__init__()
         self.k = k
         self.size = size
@@ -352,7 +365,7 @@ class DrawContour(nn.Module):
             ceil_mode=False,
         )
         self.sobel = Sobel()
-        self.ctm = ContourToMask(size=self.size, k=self.k)
+        self.ctm = ContourToMask(size=self.size, k=self.k, compile=compile)
 
     def forward(self, contour: torch.Tensor) -> torch.Tensor:
         """
