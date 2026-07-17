@@ -24,7 +24,7 @@ def _validate_contour(contour: torch.Tensor) -> None:
         raise ValueError(
             f"contour last dimension must be 2 (x, y coordinates), got {contour.shape[-1]}"
         )
-    if (contour < 0).any() or (contour > 1).any():
+    if contour.min() < 0 or contour.max() > 1:
         raise ValueError("Tensor values should be in the range [0, 1]")
 
 
@@ -91,27 +91,19 @@ class _ContourBase(nn.Module):
         mesh = self.mesh.unsqueeze(0).expand(bn, -1, -1, -1)       # (B*N, P, 1, 2)
 
         contour = torch.unsqueeze(contour, dim=1)                   # (B*N, 1, K, 2)
-        diff = -mesh + contour                                       # (B*N, P, K, 2)
+        roll_contour = torch.roll(contour, -1, dims=2)             # (B*N, 1, K, 2)
+        diff      = contour      - mesh                             # (B*N, P, K, 2)
+        roll_diff = roll_contour - mesh                             # (B*N, P, K, 2)
 
-        # Minimum distance from each pixel to the nearest vertex
-        vertex_norms = torch.linalg.vector_norm(diff, dim=-1)       # (B*N, P, K)
-        min_diff = torch.min(vertex_norms, dim=2)[0]                # (B*N, P)
-        min_diff = min_diff.reshape(bn, self.size, self.size)
-
-        # Winding-number soft sign: keeps the same sign convention as the
-        # original formulation (diff_y * roll_x − diff_x * roll_y)
-        roll_diff = torch.roll(diff, -1, dims=2)                    # (B*N, P, K, 2)
-        sign = diff * torch.roll(roll_diff, 1, dims=3)
-        sign = sign[:, :, :, 1] - sign[:, :, :, 0]
+        sign = diff[..., 1] * roll_diff[..., 0] - diff[..., 0] * roll_diff[..., 1]  # (B*N, P, K)
         sign = torch.tanh(self.k * sign)                            # (B*N, P, K)
 
         norm_diff = torch.clamp(
-            torch.linalg.vector_norm(diff, dim=3), self.eps, None
+            torch.linalg.vector_norm(diff, dim=-1), self.eps, None
         )                                                           # (B*N, P, K)
-        norm_roll = torch.clamp(
-            torch.linalg.vector_norm(roll_diff, dim=3), self.eps, None
-        )
-        scalar_product = torch.sum(diff * roll_diff, dim=3)        # (B*N, P, K)
+        min_diff = norm_diff.min(dim=2).values.reshape(bn, self.size, self.size)
+        norm_roll = torch.roll(norm_diff, -1, dims=2)               # (B*N, P, K)
+        scalar_product = (diff * roll_diff).sum(dim=-1)             # (B*N, P, K)
         cos_angle = torch.clamp(
             scalar_product / (norm_diff * norm_roll + self.eps),
             -1 + self.eps,
@@ -119,9 +111,8 @@ class _ContourBase(nn.Module):
         )
         angles = torch.acos(cos_angle)                             # (B*N, P, K)
         mask = torch.abs(
-            torch.sum(sign * angles, dim=2) / (2 * math.pi)       # sum over K
-        )                                                          # (B*N, P)
-        mask = mask.reshape(bn, self.size, self.size)
+            torch.sum(sign * angles, dim=2) / (2 * math.pi)
+        ).reshape(bn, self.size, self.size)
 
         return mask, min_diff, b, n
 
@@ -198,7 +189,7 @@ class ContourToDistanceMap(_ContourBase):
         """
         mask, min_diff, b, n = self._compute(contour)
         raw = mask * min_diff
-        dmap = (raw / torch.max(raw)).reshape(b, n, self.size, self.size)
+        dmap = (raw / raw.amax(dim=(1, 2), keepdim=True).clamp(min=self.eps)).reshape(b, n, self.size, self.size)
         if return_mask:
             return dmap, mask.reshape(b, n, self.size, self.size)
         return dmap
@@ -268,7 +259,7 @@ class ContourToIsolines(_ContourBase):
         """
         mask, min_diff, b, n = self._compute(contour)
         raw = mask * min_diff
-        dmap = (raw / torch.max(raw)).reshape(b, n, self.size, self.size)
+        dmap = (raw / raw.amax(dim=(1, 2), keepdim=True).clamp(min=self.eps)).reshape(b, n, self.size, self.size)
         mask = torch.clamp(mask, 0.0, 1.0).reshape(b, n, self.size, self.size)
         return mask[:, :, None, ...] * torch.exp(
             -((self.isolines[None, None, :, None, None] - dmap[:, :, None, ...]) ** 2)
@@ -543,7 +534,7 @@ def perimeter(contours: torch.Tensor) -> torch.Tensor:
     """
     b, n, k, _ = contours.shape
     c = contours.reshape(b * n, k, 2)
-    distances = torch.sqrt(torch.sum((c - torch.roll(c, shifts=-1, dims=1)) ** 2, dim=2))
+    distances = torch.linalg.vector_norm(c - torch.roll(c, shifts=-1, dims=1), dim=-1)
     return distances.sum(dim=-1).reshape(b, n)
 
 
@@ -875,7 +866,7 @@ def erase_first_loop_sweep_numba(contour, threshold_length):
         seg_min_y[i] = min(contour[i, 1], contour[i + 1, 1])
         seg_max_y[i] = max(contour[i, 1], contour[i + 1, 1])
 
-    order = np.argsort(seg_min_x)           # sort segment indices by min_x
+    order = np.argsort(seg_min_x)
 
     for ki in range(len(order) - 1):
         i = order[ki]
@@ -883,12 +874,12 @@ def erase_first_loop_sweep_numba(contour, threshold_length):
 
         for kj in range(ki + 1, len(order)):
             j = order[kj]
-            if seg_min_x[j] > seg_max_x[i]:  # x-ranges disjoint → stop inner loop
+            if seg_min_x[j] > seg_max_x[i]:
                 break
-            if abs(i - j) <= 1:               # adjacent segments share an endpoint
+            if abs(i - j) <= 1:
                 continue
             if seg_min_y[j] > seg_max_y[i] or seg_max_y[j] < seg_min_y[i]:
-                continue                       # y-ranges disjoint → skip
+                continue
             p3 = contour[j]; p4 = contour[j + 1]
             if is_intersecting_numba(p1, p2, p3, p4):
                 start_idx = min(i, j); end_idx = max(i, j)

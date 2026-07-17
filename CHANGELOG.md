@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.4] — 2026-07-17
+
+### Performance
+
+- **`_ContourBase._compute`**: eliminated a redundant `vertex_norms` tensor (the per-pixel nearest-vertex distances are now derived from `norm_diff`, already computed for the winding number). Removed a `torch.roll` on a `(B*N, P, K, 2)` tensor; contour nodes are rolled before broadcasting (shape `(B*N, 1, K, 2)`) so the broadcast produces `roll_diff` directly without copying the expanded tensor. `norm_roll` is now obtained via `torch.roll(norm_diff)` instead of a second `linalg.vector_norm` call.
+
+### Bug fixes
+
+- **`ContourToDistanceMap` / `ContourToIsolines`**: normalization was global across the entire `(B*N, size, size)` output, so a large polygon in the batch would compress the distance maps of smaller ones. Fixed to per-polygon normalization via `raw.amax(dim=(1, 2), keepdim=True)`.
+
+### Code quality
+
+- `_validate_contour`: replaced two bool-tensor allocations (`(contour < 0).any()`, `(contour > 1).any()`) with scalar comparisons (`contour.min() < 0 or contour.max() > 1`).
+- `perimeter`: replaced `torch.sqrt(torch.sum(...**2, dim=2))` with `torch.linalg.vector_norm(..., dim=-1)` for consistency with the rest of the codebase.
+
+---
+
 ## [1.4.3] — 2026-07-17
 
 ### Performance
