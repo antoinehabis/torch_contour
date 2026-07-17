@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import torch
@@ -946,8 +945,6 @@ class CleanContours:
     def clean_contours(contours: np.ndarray) -> list[np.ndarray]:
         """Remove small loops from every polygon in a batch.
 
-        Contours are processed in parallel (numba releases the GIL).
-
         Parameters
         ----------
         contours : np.ndarray, shape (B, N, K, 2)
@@ -959,19 +956,15 @@ class CleanContours:
         """
         b, n, k, _ = contours.shape
         contours = contours.reshape(b * n, k, 2)
-
-        def _clean_one(contour: np.ndarray) -> np.ndarray:
+        results = []
+        for contour in contours:
             length = contour_length_numba(contour)
-            return CleanContours.remove_small_loops(contour, length)
-
-        with ThreadPoolExecutor() as pool:
-            return list(pool.map(_clean_one, contours))
+            results.append(CleanContours.remove_small_loops(contour, length))
+        return results
 
     @staticmethod
     def clean_contours_and_interpolate(contours: np.ndarray) -> np.ndarray:
         """Remove small loops and re-interpolate to the original node count.
-
-        Contours are processed in parallel (numba releases the GIL).
 
         Parameters
         ----------
@@ -983,15 +976,11 @@ class CleanContours:
         """
         b, n, k, _ = contours.shape
         contours = contours.reshape(b * n, k, 2)
-
-        def _clean_and_interp_one(contour: np.ndarray) -> np.ndarray:
+        results = []
+        for contour in contours:
             length = contour_length_numba(contour)
             contour = CleanContours.remove_small_loops(contour, length)
-            return CleanContours.interpolate(contour, k)
-
-        with ThreadPoolExecutor() as pool:
-            results = list(pool.map(_clean_and_interp_one, contours))
-
+            results.append(CleanContours.interpolate(contour, k))
         return np.array(results).reshape(b, n, k, 2)
 
 
