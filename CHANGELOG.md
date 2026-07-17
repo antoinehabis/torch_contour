@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1] — 2026-07-17
+
+### Bug fixes / performance
+
+- Removed `ThreadPoolExecutor` from `CleanContours.clean_contours` and `clean_contours_and_interpolate`. Benchmarks showed the thread pool overhead consistently exceeded the compute time per contour at all tested scales, making it slower than the straightforward sequential loop. The real performance gains are: numba `cache=True`, AABB pre-filter, and early exit in `is_intersecting_numba`.
+
+---
+
 ## [1.4.0] — 2026-07-16
 
 ### New features
